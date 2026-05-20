@@ -1,0 +1,6 @@
+{
+  "name": "PropPost",
+  "description": "Generate and schedule branded social media posts for real estate properties and agents.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
