@@ -23,14 +23,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchUserProfile = async (userId: string) => {
+  const fetchUserProfile = async (userId: string, sessionUser?: User | null) => {
     try {
-      // Check agencies first
-      const { data: agencyData } = await supabase
+      // Check agencies first. Use maybeSingle so "no row" returns null cleanly
+      // instead of throwing — .single() throws on zero rows, which previously
+      // got swallowed by the catch and made the app think every error meant
+      // "no profile exists."
+      const { data: agencyData, error: agencyErr } = await supabase
         .from('agencies')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
+
+      if (agencyErr) {
+        console.error('[Auth] agencies lookup failed:', agencyErr);
+      }
 
       if (agencyData) {
         return {
@@ -43,12 +50,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       }
 
-      // Then check agents
-      const { data: agentData } = await supabase
+      const { data: agentData, error: agentErr } = await supabase
         .from('agents')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
+
+      if (agentErr) {
+        console.error('[Auth] agents lookup failed:', agentErr);
+      }
 
       if (agentData) {
         return {
@@ -60,9 +70,77 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       }
 
+      // Self-healing path:
+      // Session exists but no profile row in either table. This happens when
+      // the handle_new_user trigger silently failed during signup (its
+      // EXCEPTION block swallows errors so it doesn't block auth). We
+      // reconstruct the profile from the metadata stored on auth.users.
+      const meta = sessionUser?.user_metadata as Record<string, any> | undefined;
+      const role = meta?.role as UserRole | undefined;
+
+      if (role === 'agent' && sessionUser) {
+        console.warn('[Auth] No agents row found for verified user, self-healing from metadata');
+        const { error: insertErr } = await supabase.from('agents').insert({
+          id: sessionUser.id,
+          full_name: meta?.fullName || meta?.name || meta?.full_name || 'Agent',
+          email: sessionUser.email,
+          cellphone: meta?.cellphone,
+          whatsapp_number: meta?.whatsapp_number || meta?.whatsappNumber,
+          job_title: meta?.job_title || meta?.jobTitle,
+          ppra_number: meta?.ppra_number || meta?.ppraNumber,
+          bio: meta?.bio,
+          specialisation: meta?.specialisation,
+          areas: meta?.areas || [],
+          instagram_url: meta?.instagram_url || meta?.instagramUrl,
+          agency_id: meta?.agency_id || meta?.agencyId || null,
+          status: meta?.status || 'active',
+        });
+        if (insertErr) {
+          console.error('[Auth] Self-heal insert (agents) failed:', insertErr);
+          return null;
+        }
+        return {
+          id: sessionUser.id,
+          name: meta?.fullName || meta?.name || sessionUser.email || 'Agent',
+          email: sessionUser.email || '',
+          role: 'agent' as UserRole,
+          agency_id: meta?.agency_id || meta?.agencyId || undefined,
+        };
+      }
+
+      if (role === 'agency' && sessionUser) {
+        console.warn('[Auth] No agencies row found for verified user, self-healing from metadata');
+        const joinCode = meta?.joinCode || meta?.join_code ||
+          Math.random().toString(36).substring(2, 8).toUpperCase();
+        const { error: insertErr } = await supabase.from('agencies').insert({
+          id: sessionUser.id,
+          agency_name: meta?.agencyName || meta?.agency_name || 'New Agency',
+          email: sessionUser.email,
+          join_code: joinCode,
+          plan: meta?.plan || 'free',
+        });
+        if (insertErr) {
+          console.error('[Auth] Self-heal insert (agencies) failed:', insertErr);
+          return null;
+        }
+        return {
+          id: sessionUser.id,
+          name: meta?.agencyName || meta?.agency_name || 'New Agency',
+          email: sessionUser.email || '',
+          role: 'agency' as UserRole,
+          agency_name: meta?.agencyName || meta?.agency_name,
+          agency_id: sessionUser.id,
+        };
+      }
+
+      console.warn('[Auth] No profile found and no role in metadata. User cannot be routed.', {
+        userId,
+        hasMeta: !!meta,
+        role,
+      });
       return null;
     } catch (error) {
-      console.error('Error fetching user profile:', error);
+      console.error('[Auth] fetchUserProfile threw unexpectedly:', error);
       return null;
     }
   };
@@ -73,7 +151,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSession(session);
       setToken(session?.access_token || null);
       if (session?.user) {
-        fetchUserProfile(session.user.id).then(profile => {
+        fetchUserProfile(session.user.id, session.user).then(profile => {
           setUser(profile);
           setIsLoading(false);
         });
@@ -87,7 +165,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSession(session);
       setToken(session?.access_token || null);
       if (session?.user) {
-        const profile = await fetchUserProfile(session.user.id);
+        const profile = await fetchUserProfile(session.user.id, session.user);
         setUser(profile);
       } else {
         setUser(null);
