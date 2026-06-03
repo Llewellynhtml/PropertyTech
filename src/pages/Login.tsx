@@ -24,13 +24,23 @@ export default function Login() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (session && user) {
-      if (user.role === 'agency') {
-        navigate('/agency-dashboard');
-      } else {
-        navigate('/agent-dashboard');
-      }
+    if (!session) return;
+
+    if (user) {
+      navigate(user.role === 'agency' ? '/agency-dashboard' : '/agent-dashboard');
+      return;
     }
+
+    // Session exists but profile fetch returned null. The self-healing in
+    // AuthContext should have recovered this. If it didn't, fall back to the
+    // role stored in auth metadata so we at least route somewhere sensible.
+    const role = (session.user?.user_metadata as Record<string, any> | undefined)?.role;
+    if (role === 'agency') {
+      navigate('/agency-dashboard');
+    } else if (role === 'agent') {
+      navigate('/agent-dashboard');
+    }
+    // Otherwise stay on /login; the console will show why fetchUserProfile failed.
   }, [session, user, navigate]);
 
   useEffect(() => {
