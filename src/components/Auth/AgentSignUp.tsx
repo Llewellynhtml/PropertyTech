@@ -277,6 +277,12 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
 
     setIsLoading(true);
     try {
+      // Resolve the status explicitly per join method so the trigger and the
+      // client-side fallback agree. Independent = active immediately; request
+      // = pending until admin approval; code & email_invite = active.
+      const resolvedStatus =
+        joinMethod === 'request' ? 'pending' : 'active';
+
       await signUp(form.email, 'agent', {
         password: form.password,
         name: `${form.firstName} ${form.lastName}`,
@@ -291,7 +297,7 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
         specialisation: form.specialisation,
         areas: selectedAreas,
         instagram_url: form.instagramUrl,
-        status: joinMethod === 'request' ? 'pending' : 'active',
+        status: resolvedStatus,
       });
       setIsSuccess(true);
       toast.success(
