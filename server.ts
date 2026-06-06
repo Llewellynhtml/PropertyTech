@@ -1,9 +1,14 @@
 import "dotenv/config";
 import express from "express";
 import path from "path";
+import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
 
-// Note: __filename and __dirname are globals in CommonJS, no import.meta needed.
+// Derive __filename and __dirname for ES modules. The original code assumed
+// CommonJS globals, which don't exist when package.json has "type": "module",
+// so the server crashed on startup with "ReferenceError: __dirname is not defined".
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function startServer() {
   console.log(`Starting server in ${process.env.NODE_ENV || "development"} mode`);
@@ -11,20 +16,35 @@ async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
-  const ai = new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      }
-    }
-  });
+  // Only initialize Gemini if a key was provided. Without this guard the SDK
+  // logs "API key should be set when using the Gemini API." on boot, and any
+  // /api/generate-post call would 500. With no key we leave `ai` null and
+  // return a clear error from that route.
+  const ai = process.env.GEMINI_API_KEY
+    ? new GoogleGenAI({
+        apiKey: process.env.GEMINI_API_KEY,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      })
+    : null;
+
+  if (!ai) {
+    console.warn("[server] GEMINI_API_KEY not set — /api/generate-post will return 503.");
+  }
 
   app.use(express.json());
   app.use("/uploads", express.static(path.join(__dirname, "public/uploads")));
 
   // API Routes
   app.post("/api/generate-post", async (req, res) => {
+    if (!ai) {
+      return res.status(503).json({
+        error: "AI service not configured. Set GEMINI_API_KEY in your .env file and restart the server.",
+      });
+    }
     try {
       const { property, agent, platform, tone } = req.body;
       
