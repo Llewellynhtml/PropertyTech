@@ -23,7 +23,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchUserProfile = async (userId: string, sessionUser?: User | null) => {
+  const fetchUserProfile = async (userId: string, sessionUser?: User | null): Promise<UserProfile | null> => {
     try {
       // Check agencies first. Use maybeSingle so "no row" returns null cleanly
       // instead of throwing — .single() throws on zero rows, which previously
@@ -178,16 +178,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password?: string) => {
     if (password) {
-      return supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      return data;
     }
-    return supabase.auth.signInWithOtp({ email });
+    const { data, error } = await supabase.auth.signInWithOtp({ email });
+    if (error) throw error;
+    return data;
   };
 
   const signUp = async (email: string, role: UserRole, metadata: any) => {
     // Ensure metadata includes the role for the trigger
     // Also ensure numeric fields are correctly typed and handle potential nulls
-    const signUpData: any = { 
-      role, 
+    const signUpData: any = {
+      role,
       ...metadata,
       // Map common field names to ensure trigger picks them up regardless of form field names
       fullName: metadata.fullName || metadata.name || metadata.full_name,
@@ -199,24 +203,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       signUpData.join_code = Math.random().toString(36).substring(2, 8).toUpperCase();
       signUpData.joinCode = signUpData.join_code;
     }
-    
-    const { data, error: signUpError } = await supabase.auth.signUp({ 
-      email, 
+
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
       password: metadata.password || 'temporary-password',
       options: {
         data: signUpData
       }
     });
-    
+
     if (signUpError) {
       console.error('Supabase Auth SignUp detailed error:', signUpError);
       const errorMsg = signUpError.message.toLowerCase();
-      
+
       if (errorMsg.includes('user already registered') || errorMsg.includes('email already in use')) {
         throw new Error('This email is already registered. If you forgot your password, please use the reset option or try signing in.');
       }
-      
-      // If it's a database error, it might be the trigger. 
+
+      // If it's a database error, it might be the trigger.
       // We'll provide a more helpful message.
       if (errorMsg.includes('database') || errorMsg.includes('server')) {
         throw new Error('There was a database error while creating your profile. This often happens if the email is already in use or if the system is busy. Please try again or contact support.');
@@ -227,7 +231,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (data.user) {
       try {
-        // We still try to insert client-side as a fallback, 
+        // We still try to insert client-side as a fallback,
         // but we ignore "already exists" errors because the trigger might have done it already.
         if (role === 'agency') {
           const { error: insertError } = await supabase.from('agencies').insert({
@@ -248,7 +252,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             plan_platform_limit: signUpData.plan_platform_limit,
             trial_ends_at: signUpData.trial_ends_at
           });
-          
+
           if (insertError) {
             const errLower = insertError.message.toLowerCase();
             if (!errLower.includes('unique') && !errLower.includes('already exists') && !errLower.includes('duplicate')) {
@@ -271,7 +275,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             agency_id: signUpData.agency_id || signUpData.agencyId,
             status: signUpData.status || 'active'
           });
-          
+
           if (insertError) {
             const errLower = insertError.message.toLowerCase();
             if (!errLower.includes('unique') && !errLower.includes('already exists') && !errLower.includes('duplicate')) {
@@ -301,13 +305,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      session, 
-      token, 
-      isLoading, 
-      signIn, 
-      signOut, 
+    <AuthContext.Provider value={{
+      user,
+      session,
+      token,
+      isLoading,
+      signIn,
+      signOut,
       signUp,
       resetPassword,
       resendVerification
