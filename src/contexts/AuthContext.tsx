@@ -226,8 +226,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('This email is already registered. If you forgot your password, please use the reset option or try signing in.');
       }
 
-      // If it's a database error, it might be the trigger.
-      // We'll provide a more helpful message.
+      if (errorMsg.includes('rate limit') || errorMsg.includes('over email send rate limit')) {
+        throw new Error('Too many sign-up attempts. Please wait a few minutes and try again, or use a different email address.');
+      }
+
       if (errorMsg.includes('database') || errorMsg.includes('server')) {
         throw new Error('There was a database error while creating your profile. This often happens if the email is already in use or if the system is busy. Please try again or contact support.');
       }
