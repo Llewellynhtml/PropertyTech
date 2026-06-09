@@ -23,17 +23,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const buildProfileFromMeta = (userId: string, sessionUser: User): UserProfile | null => {
+    const meta = sessionUser.user_metadata as Record<string, any> | undefined;
+    if (!meta?.role) return null;
+    return {
+      id: userId,
+      name: meta.fullName || meta.name || meta.full_name || sessionUser.email?.split('@')[0] || 'User',
+      email: sessionUser.email || '',
+      role: meta.role as UserRole,
+      agency_id: meta.agency_id || meta.agencyId || undefined,
+      agency_name: meta.agency_name || meta.agencyName || undefined,
+    };
+  };
+
   const fetchUserProfile = async (userId: string, sessionUser?: User | null): Promise<UserProfile | null> => {
     try {
-      // Query both tables in parallel — cuts initial load time in half vs
-      // sequential awaits.
-      const [
-        { data: agencyData, error: agencyErr },
-        { data: agentData,  error: agentErr  },
-      ] = await Promise.all([
+      // Race the DB queries against a 10-second timeout so a paused/slow
+      // Supabase project never blocks the UI indefinitely.
+      const TIMEOUT_MS = 10_000;
+      const dbQuery = Promise.all([
         supabase.from('agencies').select('id, agency_name, email').eq('id', userId).maybeSingle(),
         supabase.from('agents').select('id, full_name, email, agency_id').eq('id', userId).maybeSingle(),
       ]);
+      const timedOut = Symbol('timeout');
+      const raceResult = await Promise.race([
+        dbQuery,
+        new Promise<typeof timedOut>(resolve => setTimeout(() => resolve(timedOut), TIMEOUT_MS)),
+      ]);
+
+      if (raceResult === timedOut) {
+        console.warn('[Auth] Profile DB query timed out — using auth metadata as fallback');
+        return sessionUser ? buildProfileFromMeta(userId, sessionUser) : null;
+      }
+
+      const [
+        { data: agencyData, error: agencyErr },
+        { data: agentData,  error: agentErr  },
+      ] = raceResult;
 
       if (agencyErr) console.error('[Auth] agencies lookup failed:', agencyErr);
       if (agentErr)  console.error('[Auth] agents lookup failed:',  agentErr);
@@ -137,16 +163,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    // Fast path: if there is no cached session, clear loading immediately so
-    // the login page renders without waiting for onAuthStateChange to fire.
+    // getSession reads from localStorage — fast, no network call needed.
+    // Unblocks the UI immediately: sets session state and clears isLoading
+    // so the user never stares at a spinner while the DB is slow/paused.
+    // fetchUserProfile then loads the profile in the background.
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) setIsLoading(false);
+      setSession(session);
+      setToken(session?.access_token || null);
+      setIsLoading(false); // session state is known — unblock UI now
+      if (session?.user) {
+        fetchUserProfile(session.user.id, session.user).then(setUser);
+      }
     });
 
-    // onAuthStateChange handles all subsequent events (INITIAL_SESSION,
-    // SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED, EMAIL_CONFIRMED) and is the
-    // single place that runs fetchUserProfile.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    // onAuthStateChange handles events AFTER initial load: sign-in,
+    // sign-out, token refresh, email confirmation. Skip INITIAL_SESSION
+    // since getSession already handled it.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'INITIAL_SESSION') return;
       setSession(session);
       setToken(session?.access_token || null);
       if (session?.user) {
@@ -155,7 +189,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setUser(null);
       }
-      setIsLoading(false);
     });
 
     return () => subscription.unsubscribe();
