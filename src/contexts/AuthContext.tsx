@@ -25,19 +25,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUserProfile = async (userId: string, sessionUser?: User | null): Promise<UserProfile | null> => {
     try {
-      // Check agencies first. Use maybeSingle so "no row" returns null cleanly
-      // instead of throwing — .single() throws on zero rows, which previously
-      // got swallowed by the catch and made the app think every error meant
-      // "no profile exists."
-      const { data: agencyData, error: agencyErr } = await supabase
-        .from('agencies')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
+      // Query both tables in parallel — cuts initial load time in half vs
+      // sequential awaits.
+      const [
+        { data: agencyData, error: agencyErr },
+        { data: agentData,  error: agentErr  },
+      ] = await Promise.all([
+        supabase.from('agencies').select('id, agency_name, email').eq('id', userId).maybeSingle(),
+        supabase.from('agents').select('id, full_name, email, agency_id').eq('id', userId).maybeSingle(),
+      ]);
 
-      if (agencyErr) {
-        console.error('[Auth] agencies lookup failed:', agencyErr);
-      }
+      if (agencyErr) console.error('[Auth] agencies lookup failed:', agencyErr);
+      if (agentErr)  console.error('[Auth] agents lookup failed:',  agentErr);
 
       if (agencyData) {
         return {
@@ -46,18 +45,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: agencyData.email,
           role: 'agency' as UserRole,
           agency_name: agencyData.agency_name,
-          agency_id: agencyData.id
+          agency_id: agencyData.id,
         };
-      }
-
-      const { data: agentData, error: agentErr } = await supabase
-        .from('agents')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (agentErr) {
-        console.error('[Auth] agents lookup failed:', agentErr);
       }
 
       if (agentData) {
@@ -66,7 +55,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           name: agentData.full_name,
           email: agentData.email,
           role: 'agent' as UserRole,
-          agency_id: agentData.agency_id
+          agency_id: agentData.agency_id,
         };
       }
 
@@ -148,23 +137,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    // Initial session check
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setToken(session?.access_token || null);
-      if (session?.user) {
-        fetchUserProfile(session.user.id, session.user).then(profile => {
-          setUser(profile);
-          setIsLoading(false);
-        });
-      } else {
-        setIsLoading(false);
-      }
-    });
-
-    // Listen for auth changes — this fires on sign-in, sign-out, token refresh,
-    // and crucially on EMAIL_CONFIRMED (when user clicks the verification link).
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // onAuthStateChange fires INITIAL_SESSION immediately on mount with the
+    // current session (same as getSession), then fires again on every auth
+    // event (sign-in, sign-out, token refresh, email confirmation).
+    // Using it as the single source of truth avoids running fetchUserProfile
+    // twice on startup.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       setToken(session?.access_token || null);
       if (session?.user) {
