@@ -105,15 +105,27 @@ CREATE POLICY "agents_public_read" ON agents FOR SELECT TO public USING (true);
 DROP POLICY IF EXISTS "agencies_read" ON agencies;
 CREATE POLICY "agencies_read" ON agencies FOR SELECT TO public USING (true);
 
--- Policies: Allow users to update their own profiles
+-- Policies: Allow users to manage their own profiles
 DROP POLICY IF EXISTS "agents_update_own" ON agents;
 CREATE POLICY "agents_update_own" ON agents FOR UPDATE TO authenticated USING (auth.uid() = id);
 
 DROP POLICY IF EXISTS "agencies_update_own" ON agencies;
 CREATE POLICY "agencies_update_own" ON agencies FOR UPDATE TO authenticated USING (auth.uid() = id);
 
--- Trigger for automatic profile creation (BEST PRACTICE)
--- This ensures that even if client-side insert fails, the row is created.
+-- INSERT policies (previously missing — without these, self-heal in the app
+-- and any authenticated insert would be silently rejected by RLS)
+DROP POLICY IF EXISTS "agents_insert_own" ON agents;
+CREATE POLICY "agents_insert_own" ON agents
+  FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() = id);
+
+DROP POLICY IF EXISTS "agencies_insert_own" ON agencies;
+CREATE POLICY "agencies_insert_own" ON agencies
+  FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() = id);
+
+-- ── Trigger: fires on new user signup (INSERT) ────────────────────────────────
+-- Creates the profile row immediately so it exists before email confirmation.
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 DECLARE
@@ -122,7 +134,7 @@ DECLARE
     agency_uuid uuid;
 BEGIN
   role_name := new.raw_user_meta_data->>'role';
-  
+
   IF (role_name = 'agency') THEN
     BEGIN
       INSERT INTO public.agencies (id, agency_name, email, join_code, plan)
@@ -135,24 +147,22 @@ BEGIN
       )
       ON CONFLICT (id) DO NOTHING;
     EXCEPTION WHEN others THEN
-      -- Silently catch error to not block auth signup
       RETURN new;
     END;
+
   ELSIF (role_name = 'agent') THEN
-    agency_id_text := new.raw_user_meta_data->>'agency_id';
-    IF (agency_id_text IS NULL) THEN
-        agency_id_text := new.raw_user_meta_data->>'agencyId';
-    END IF;
-    
-    -- Safely convert agency_id to uuid
+    agency_id_text := COALESCE(
+      new.raw_user_meta_data->>'agency_id',
+      new.raw_user_meta_data->>'agencyId'
+    );
     IF (agency_id_text IS NOT NULL AND agency_id_text <> '' AND agency_id_text <> 'null') THEN
-        BEGIN
-            agency_uuid := agency_id_text::uuid;
-        EXCEPTION WHEN others THEN
-            agency_uuid := NULL;
-        END;
-    ELSE
+      BEGIN
+        agency_uuid := agency_id_text::uuid;
+      EXCEPTION WHEN others THEN
         agency_uuid := NULL;
+      END;
+    ELSE
+      agency_uuid := NULL;
     END IF;
 
     BEGIN
@@ -162,14 +172,14 @@ BEGIN
         COALESCE(new.raw_user_meta_data->>'fullName', new.raw_user_meta_data->>'name', new.raw_user_meta_data->>'full_name', 'New Agent'),
         new.email,
         agency_uuid,
-        COALESCE(new.raw_user_meta_data->>'status', 'pending')
+        COALESCE(new.raw_user_meta_data->>'status', 'active')
       )
       ON CONFLICT (id) DO NOTHING;
     EXCEPTION WHEN others THEN
-      -- Silently catch error to not block auth signup
       RETURN new;
     END;
   END IF;
+
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -178,6 +188,75 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- ── Trigger: fires on email confirmation (UPDATE) ─────────────────────────────
+-- Safety-net: ensures the profile row exists when the user confirms their email,
+-- in case the INSERT trigger missed it (e.g. metadata not yet propagated).
+-- CRITICAL: the EXCEPTION block always returns new — this trigger must NEVER
+-- block the email confirmation flow.
+CREATE OR REPLACE FUNCTION public.handle_user_confirmed()
+RETURNS trigger AS $$
+DECLARE
+  agency_id_text text;
+  agency_uuid uuid;
+BEGIN
+  -- Only act when email_confirmed_at transitions from NULL → a value
+  IF (new.email_confirmed_at IS NOT NULL AND old.email_confirmed_at IS NULL) THEN
+
+    IF (new.raw_user_meta_data->>'role' = 'agent') THEN
+      agency_id_text := COALESCE(
+        new.raw_user_meta_data->>'agency_id',
+        new.raw_user_meta_data->>'agencyId'
+      );
+      IF (agency_id_text IS NOT NULL AND agency_id_text <> '' AND agency_id_text <> 'null') THEN
+        BEGIN
+          agency_uuid := agency_id_text::uuid;
+        EXCEPTION WHEN others THEN
+          agency_uuid := NULL;
+        END;
+      ELSE
+        agency_uuid := NULL;
+      END IF;
+
+      INSERT INTO public.agents (id, full_name, email, agency_id, status)
+      VALUES (
+        new.id,
+        COALESCE(new.raw_user_meta_data->>'fullName', new.raw_user_meta_data->>'name', new.raw_user_meta_data->>'full_name', 'Agent'),
+        new.email,
+        agency_uuid,
+        COALESCE(new.raw_user_meta_data->>'status', 'active')
+      )
+      ON CONFLICT (id) DO NOTHING;
+
+    ELSIF (new.raw_user_meta_data->>'role' = 'agency') THEN
+      INSERT INTO public.agencies (id, agency_name, email, join_code, plan)
+      VALUES (
+        new.id,
+        COALESCE(new.raw_user_meta_data->>'agencyName', new.raw_user_meta_data->>'agency_name', 'New Agency'),
+        new.email,
+        COALESCE(
+          new.raw_user_meta_data->>'joinCode',
+          new.raw_user_meta_data->>'join_code',
+          upper(substring(gen_random_uuid()::text from 1 for 8))
+        ),
+        COALESCE(new.raw_user_meta_data->>'plan', 'free')
+      )
+      ON CONFLICT (id) DO NOTHING;
+    END IF;
+
+  END IF;
+
+  RETURN new;
+EXCEPTION WHEN others THEN
+  -- Never block email confirmation regardless of what went wrong above
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_confirmed ON auth.users;
+CREATE TRIGGER on_auth_user_confirmed
+  AFTER UPDATE ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_user_confirmed();
 
 -- 5. AMENITIES TABLE
 CREATE TABLE IF NOT EXISTS amenities (
