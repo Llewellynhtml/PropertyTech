@@ -96,8 +96,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           status: meta?.status || 'active',
         });
         if (insertErr) {
-          console.error('[Auth] Self-heal insert (agents) failed:', insertErr);
-          return null;
+          // DB insert failed (e.g. RLS not yet set up, column mismatch) but the
+          // user IS authenticated — return a profile from metadata so they can
+          // reach the dashboard. The DB record will be created on next sign-in
+          // once the underlying issue is resolved.
+          console.error('[Auth] Self-heal insert (agents) failed, falling back to metadata profile:', insertErr);
         }
         return {
           id: sessionUser.id,
@@ -120,8 +123,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           plan: meta?.plan || 'free',
         });
         if (insertErr) {
-          console.error('[Auth] Self-heal insert (agencies) failed:', insertErr);
-          return null;
+          console.error('[Auth] Self-heal insert (agencies) failed, falling back to metadata profile:', insertErr);
         }
         return {
           id: sessionUser.id,
@@ -160,8 +162,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    // Listen for auth changes — this fires on sign-in, sign-out, token refresh,
+    // and crucially on EMAIL_CONFIRMED (when user clicks the verification link).
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session);
       setToken(session?.access_token || null);
       if (session?.user) {
@@ -208,7 +211,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email,
       password: metadata.password || 'temporary-password',
       options: {
-        data: signUpData
+        data: signUpData,
+        // After clicking the verification link, redirect back to /login so
+        // the Login page's session-watcher can route them to the dashboard.
+        emailRedirectTo: `${window.location.origin}/login`,
       }
     });
 
