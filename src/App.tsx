@@ -79,20 +79,7 @@ function RootRedirect() {
     );
   }
   
-  if (!session) return <Navigate to="/login" replace />;
-
-  // Session exists but profile not loaded yet — wait for onAuthStateChange to
-  // finish fetchUserProfile rather than bouncing the user back to /login.
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-brand-surface flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-brand-teal border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm font-bold text-brand-muted uppercase tracking-widest">Loading workspace...</p>
-        </div>
-      </div>
-    );
-  }
+  if (!session || !user) return <Navigate to="/login" replace />;
 
   if (user.role === 'agency') return <Navigate to="/agency-dashboard" replace />;
   return <Navigate to="/agent-dashboard" replace />;

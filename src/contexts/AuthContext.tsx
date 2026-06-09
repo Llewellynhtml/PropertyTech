@@ -137,11 +137,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    // onAuthStateChange fires INITIAL_SESSION immediately on mount with the
-    // current session (same as getSession), then fires again on every auth
-    // event (sign-in, sign-out, token refresh, email confirmation).
-    // Using it as the single source of truth avoids running fetchUserProfile
-    // twice on startup.
+    // Fast path: if there is no cached session, clear loading immediately so
+    // the login page renders without waiting for onAuthStateChange to fire.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) setIsLoading(false);
+    });
+
+    // onAuthStateChange handles all subsequent events (INITIAL_SESSION,
+    // SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED, EMAIL_CONFIRMED) and is the
+    // single place that runs fetchUserProfile.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       setToken(session?.access_token || null);
