@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   LayoutDashboard, 
@@ -54,6 +55,7 @@ const sections = ['Overview', 'Management', 'Insights', 'Marketing', 'System'];
 
 export default function Sidebar({ activePage, setActivePage, isCollapsed, setIsCollapsed, isOpen, setIsOpen, role }: SidebarProps) {
   const { signOut } = useAuth();
+  const navigate = useNavigate();
 
   const filteredNavItems = navItems.filter(item => {
     if (item.roles && !item.roles.includes(role || 'agent')) return false;
@@ -173,8 +175,8 @@ export default function Sidebar({ activePage, setActivePage, isCollapsed, setIsC
           >
             {isCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
           </button>
-          <button 
-            onClick={() => signOut()}
+          <button
+            onClick={async () => { await signOut(); navigate('/login'); }}
             className="w-full flex items-center gap-3 px-3 py-2.5 mt-2 rounded-xl text-gray-500 hover:bg-red-50 hover:text-red-600 transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-red-500"
             aria-label="Logout"
           >
