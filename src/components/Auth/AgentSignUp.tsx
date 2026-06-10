@@ -171,8 +171,58 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
   const [agencyResults, setAgencyResults] = useState<any[]>([]);
   const codeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Email invite token (resolved from ?invite= URL param on mount)
+  const [inviteToken, setInviteToken]           = useState<string | null>(null);
+  const [inviteValidating, setInviteValidating] = useState(false);
+  const [inviteError, setInviteError]           = useState<string | null>(null);
+
   const [selectedAreas, setSelectedAreas] = useState<string[]>([]);
   const { signUp } = useAuth();
+
+  // ── Resolve ?invite=TOKEN on mount ─────────────────────────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('invite');
+    if (!token) return;
+
+    setJoinMethod('email_invite');
+    setInviteValidating(true);
+
+    (async () => {
+      const { data: invite } = await supabase
+        .from('invites')
+        .select('id, agency_id, invitee_email, expires_at')
+        .eq('token', token)
+        .is('used_at', null)
+        .maybeSingle();
+
+      if (!invite) {
+        setInviteError('This invitation link is invalid or has already been used.');
+        setInviteValidating(false);
+        return;
+      }
+      if (new Date(invite.expires_at) < new Date()) {
+        setInviteError('This invitation link has expired. Ask your agency admin for a new one.');
+        setInviteValidating(false);
+        return;
+      }
+
+      const { data: agency } = await supabase
+        .from('agencies')
+        .select('id, agency_name, city')
+        .eq('id', invite.agency_id)
+        .maybeSingle();
+
+      if (agency) {
+        setConfirmedAgency({ id: agency.id, name: agency.agency_name, city: agency.city });
+      }
+      if (invite.invitee_email) {
+        setForm(prev => ({ ...prev, email: invite.invitee_email }));
+      }
+      setInviteToken(token);
+      setInviteValidating(false);
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [form, setForm] = useState({
     inviteCode: '',
@@ -237,7 +287,7 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
   // ── Agency is optional — validate only when a path requires it ──────────────
   const canLeaveStep0 = (): boolean => {
     if (joinMethod === 'independent')  return true;
-    if (joinMethod === 'email_invite') return false; // must use email link
+    if (joinMethod === 'email_invite') return !!inviteToken && !!confirmedAgency;
     if (joinMethod === 'code')         return codeStatus === 'valid' && !!confirmedAgency;
     if (joinMethod === 'request')      return !!confirmedAgency;
     return false;
@@ -245,7 +295,7 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
 
   const validateStep = (): boolean => {
     if (step === 0) {
-      if (joinMethod === 'email_invite') {
+      if (joinMethod === 'email_invite' && !inviteToken) {
         toast.error('Please use the link in your invitation email to sign up.');
         return false;
       }
@@ -299,6 +349,14 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
         instagram_url: form.instagramUrl,
         status: resolvedStatus,
       });
+
+      if (inviteToken) {
+        await supabase
+          .from('invites')
+          .update({ used_at: new Date().toISOString() })
+          .eq('token', inviteToken);
+      }
+
       setIsSuccess(true);
       toast.success(
         joinMethod === 'request'
@@ -460,24 +518,53 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
               </div>
             )}
 
-            {/* ── Email invite notice (blocked) ── */}
+            {/* ── Email invite ── */}
             {joinMethod === 'email_invite' && (
               <div className="space-y-3">
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                  <p className="text-[11px] text-amber-700 leading-relaxed font-medium mb-1">
-                    Open your invitation email
-                  </p>
-                  <p className="text-[11px] text-amber-600 leading-relaxed">
-                    Find the email from your agency admin and click the <strong>"Accept invitation"</strong> link.
-                    It will bring you back here with your agency already linked — you won't need to fill in a code.
-                  </p>
-                </div>
-                <p className="text-[11px] text-brand-muted text-center">
-                  Can't find the email?{' '}
-                  <button className="text-brand-teal hover:underline" onClick={() => setJoinMethod('code')}>
-                    Use an invite code instead
-                  </button>
-                </p>
+                {inviteValidating && (
+                  <div className="flex items-center gap-3 p-4 bg-brand-surface border border-brand-border rounded-xl">
+                    <Loader2 size={16} className="animate-spin text-brand-teal flex-shrink-0" />
+                    <p className="text-[11px] text-brand-muted">Validating your invitation…</p>
+                  </div>
+                )}
+
+                {!inviteValidating && inviteError && (
+                  <div className="space-y-2">
+                    <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
+                      <p className="text-[11px] text-red-600 leading-relaxed font-medium mb-1">Invalid invitation</p>
+                      <p className="text-[11px] text-red-500 leading-relaxed">{inviteError}</p>
+                    </div>
+                    <p className="text-[11px] text-brand-muted text-center">
+                      <button type="button" className="text-brand-teal hover:underline" onClick={() => setJoinMethod('code')}>
+                        Use an invite code instead
+                      </button>
+                    </p>
+                  </div>
+                )}
+
+                {!inviteValidating && !inviteError && inviteToken && confirmedAgency && (
+                  <AgencyBadge name={confirmedAgency.name} city={confirmedAgency.city} method="email_invite" />
+                )}
+
+                {!inviteValidating && !inviteToken && !inviteError && (
+                  <div className="space-y-2">
+                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                      <p className="text-[11px] text-amber-700 leading-relaxed font-medium mb-1">
+                        Open your invitation email
+                      </p>
+                      <p className="text-[11px] text-amber-600 leading-relaxed">
+                        Find the email from your agency admin and click the <strong>"Accept invitation"</strong> link.
+                        It will bring you back here with your agency already linked — you won't need to fill in a code.
+                      </p>
+                    </div>
+                    <p className="text-[11px] text-brand-muted text-center">
+                      Can't find the email?{' '}
+                      <button type="button" className="text-brand-teal hover:underline" onClick={() => setJoinMethod('code')}>
+                        Use an invite code instead
+                      </button>
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -548,16 +635,19 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
 
             {/* Continue button */}
             <button
+              type="button"
               onClick={next}
-              disabled={joinMethod === 'email_invite' || (joinMethod !== 'independent' && !canLeaveStep0())}
+              disabled={inviteValidating || !canLeaveStep0()}
               className={cn(
                 'w-full py-3.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 group',
-                (joinMethod === 'independent' || canLeaveStep0()) && joinMethod !== 'email_invite'
+                canLeaveStep0() && !inviteValidating
                   ? 'bg-brand-charcoal text-white hover:bg-black'
                   : 'bg-brand-border text-brand-muted cursor-not-allowed',
               )}>
-              {joinMethod === 'email_invite'
-                ? 'Use the link in your email'
+              {inviteValidating
+                ? <><Loader2 size={16} className="animate-spin" /> Validating invite…</>
+                : joinMethod === 'email_invite' && !inviteToken
+                  ? 'Use the link in your email'
                 : joinMethod === 'code' && codeStatus !== 'valid'
                   ? 'Enter a valid code to continue'
                 : joinMethod === 'request' && !confirmedAgency
