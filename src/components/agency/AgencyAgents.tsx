@@ -61,6 +61,19 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// ── Compose URLs for email clients ───────────────────────────────────────────
+
+function buildEmailUrls(to: string, subject: string, body: string) {
+  const s = encodeURIComponent(subject);
+  const b = encodeURIComponent(body);
+  return {
+    gmail:   `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${s}&body=${b}`,
+    outlook: `https://outlook.live.com/mail/0/deeplink/compose?to=${encodeURIComponent(to)}&subject=${s}&body=${b}`,
+    yahoo:   `https://compose.mail.yahoo.com/?to=${encodeURIComponent(to)}&subject=${s}&body=${b}`,
+    mailto:  `mailto:${to}?subject=${s}&body=${b}`,
+  };
+}
+
 // ── Invite modal ──────────────────────────────────────────────────────────────
 
 function InviteModal({
@@ -78,11 +91,19 @@ function InviteModal({
   onCodeRegenerated: (code: string) => void;
   onInviteSent: () => void;
 }) {
-  const [tab, setTab]               = useState<'code' | 'email'>('email');
-  const [copiedCode, setCopiedCode] = useState(false);
-  const [isRegen, setIsRegen]       = useState(false);
+  const [tab, setTab]                 = useState<'code' | 'email'>('email');
+  const [copiedCode, setCopiedCode]   = useState(false);
+  const [isRegen, setIsRegen]         = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [isSending, setIsSending]   = useState(false);
+  const [isSending, setIsSending]     = useState(false);
+  const [copiedLink, setCopiedLink]   = useState(false);
+
+  // After the invite is saved to DB, show the share panel instead of mailto
+  const [shareReady, setShareReady] = useState<{
+    email: string;
+    link: string;
+    urls: ReturnType<typeof buildEmailUrls>;
+  } | null>(null);
 
   const handleCopyCode = async () => {
     await navigator.clipboard.writeText(joinCode);
@@ -100,7 +121,7 @@ function InviteModal({
     setIsRegen(false);
   };
 
-  const handleSendInvite = async () => {
+  const handleGenerateInvite = async () => {
     const email = inviteEmail.trim().toLowerCase();
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       toast.error('Enter a valid email address');
@@ -110,24 +131,39 @@ function InviteModal({
     try {
       const token     = crypto.randomUUID();
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-      const { error } = await supabase.from('invites').insert({ agency_id: agencyId, invitee_email: email, token, expires_at: expiresAt });
+      const { error } = await supabase.from('invites').insert({
+        agency_id: agencyId, invitee_email: email, token, expires_at: expiresAt,
+      });
       if (error) throw error;
 
       const link    = `${window.location.origin}/signup?invite=${token}`;
-      const subject = encodeURIComponent(`You're invited to join ${agencyName} on PropPost`);
-      const body    = encodeURIComponent(
-        `Hi,\n\nYou've been invited to join ${agencyName} on PropPost — South Africa's real estate marketing platform.\n\nClick the link below to create your agent account:\n\n${link}\n\nThis link expires in 7 days.\n\nBest,\n${agencyName}`
-      );
-      window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+      const subject = `You're invited to join ${agencyName} on PropPost`;
+      const body    = `Hi,\n\nYou've been invited to join ${agencyName} on PropPost — South Africa's real estate marketing platform.\n\nClick the link below to create your agent account:\n\n${link}\n\nThis link expires in 7 days.\n\nBest,\n${agencyName}`;
 
-      toast.success(`Invite sent to ${email}`);
-      setInviteEmail('');
+      // Auto-copy the link so the agent can paste it anywhere
+      await navigator.clipboard.writeText(link).catch(() => {});
+
+      setShareReady({ email, link, urls: buildEmailUrls(email, subject, body) });
       onInviteSent();
     } catch (err: any) {
       toast.error(err.message || 'Failed to create invite');
     } finally {
       setIsSending(false);
     }
+  };
+
+  const handleCopyLink = async () => {
+    if (!shareReady) return;
+    await navigator.clipboard.writeText(shareReady.link);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+    toast.success('Link copied!');
+  };
+
+  const handleInviteAnother = () => {
+    setShareReady(null);
+    setInviteEmail('');
+    setCopiedLink(false);
   };
 
   return (
@@ -151,100 +187,200 @@ function InviteModal({
               <UserPlus className="w-4 h-4 text-indigo-600" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-gray-900">Invite an agent</h2>
-              <p className="text-[11px] text-gray-400">Choose how you'd like to invite them</p>
+              <h2 className="text-sm font-bold text-gray-900">
+                {shareReady ? 'Invite ready!' : 'Invite an agent'}
+              </h2>
+              <p className="text-[11px] text-gray-400">
+                {shareReady ? `Send the link to ${shareReady.email}` : "Choose how you'd like to invite them"}
+              </p>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="p-2 rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
-            <X className="w-4 h-4" />
+          <button type="button" onClick={onClose} aria-label="Close" className="p-2 rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+            <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex mx-6 mt-4 bg-gray-100 rounded-xl p-1 gap-1">
-          {(['email', 'code'] as const).map(t => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTab(t)}
-              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
-                tab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {t === 'email' ? 'Email invite' : 'Invite code'}
-            </button>
-          ))}
-        </div>
+        {/* ── Share panel (shown after invite is created) ── */}
+        {shareReady ? (
+          <div className="px-6 py-5 space-y-4">
 
-        <div className="px-6 py-5">
-          {/* ── Email tab ── */}
-          {tab === 'email' && (
-            <div className="space-y-4">
-              <p className="text-xs text-gray-500 leading-relaxed">
-                Enter the agent's email — we'll generate a unique sign-up link and open your email client with a pre-written invite. The link expires in 7 days.
-              </p>
-              <div className="relative group">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-600 transition-colors" />
-                <input
-                  type="email"
-                  value={inviteEmail}
-                  onChange={e => setInviteEmail(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleSendInvite()}
-                  placeholder="agent@example.com"
-                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                />
+            {/* Success badge */}
+            <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-100 rounded-xl">
+              <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-green-800">Invite link created</p>
+                <p className="text-[11px] text-green-600 truncate mt-0.5">{shareReady.email} · expires in 7 days</p>
               </div>
+            </div>
+
+            {/* Link preview + copy */}
+            <div className="flex items-center gap-2 p-3 bg-gray-50 border border-gray-200 rounded-xl">
+              <p className="flex-1 text-[11px] text-gray-500 font-mono truncate">{shareReady.link}</p>
               <button
                 type="button"
-                onClick={handleSendInvite}
-                disabled={isSending || !inviteEmail.trim()}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all disabled:opacity-50"
+                onClick={handleCopyLink}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-100 transition-all flex-shrink-0"
               >
-                {isSending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                {isSending ? 'Generating…' : 'Send invite'}
+                {copiedLink ? <><Check className="w-3.5 h-3.5 text-green-500" /> Copied</> : <><Copy className="w-3.5 h-3.5" /> Copy</>}
               </button>
             </div>
-          )}
 
-          {/* ── Code tab ── */}
-          {tab === 'code' && (
-            <div className="space-y-4">
-              <p className="text-xs text-gray-500 leading-relaxed">
-                Share this code with any agent. They enter it on the sign-up page under "I have an invite code" to join your agency instantly.
-              </p>
+            {/* Email client buttons */}
+            <div className="space-y-2">
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Send via</p>
 
-              <div className="bg-gray-50 border border-gray-200 rounded-2xl py-5 px-6 text-center">
-                <p className="font-mono text-3xl font-black text-gray-900 tracking-[0.3em] select-all">
-                  {joinCode || '———'}
-                </p>
-              </div>
+              {/* Gmail */}
+              <a
+                href={shareReady.urls.gmail}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 w-full px-4 py-3 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all"
+              >
+                <img
+                  src="https://www.google.com/gmail/about/static/images/logo-gmail.png?cache=1adba63"
+                  alt="Gmail"
+                  className="w-5 h-5 object-contain"
+                  onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+                <span className="text-sm font-bold text-gray-800">Open in Gmail</span>
+                <span className="ml-auto text-[10px] font-bold text-green-600 bg-green-50 border border-green-100 px-2 py-0.5 rounded-full">Recommended</span>
+              </a>
 
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleCopyCode}
-                  disabled={!joinCode}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all disabled:opacity-40"
-                >
-                  {copiedCode ? <><Check className="w-4 h-4" /> Copied!</> : <><Copy className="w-4 h-4" /> Copy code</>}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRegenCode}
-                  disabled={isRegen}
-                  className="flex items-center gap-2 px-4 py-3 bg-gray-100 text-gray-600 rounded-xl text-sm font-bold hover:bg-gray-200 transition-all disabled:opacity-40"
-                >
-                  <RefreshCw className={`w-4 h-4 ${isRegen ? 'animate-spin' : ''}`} />
-                  New
-                </button>
-              </div>
+              {/* Outlook */}
+              <a
+                href={shareReady.urls.outlook}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 w-full px-4 py-3 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all"
+              >
+                <div className="w-5 h-5 bg-blue-600 rounded flex items-center justify-center flex-shrink-0">
+                  <Mail className="w-3 h-3 text-white" />
+                </div>
+                <span className="text-sm font-bold text-gray-800">Open in Outlook</span>
+              </a>
 
-              <p className="text-[11px] text-gray-400 text-center leading-relaxed">
-                Regenerating immediately invalidates the old code.
-              </p>
+              {/* Yahoo */}
+              <a
+                href={shareReady.urls.yahoo}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 w-full px-4 py-3 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all"
+              >
+                <div className="w-5 h-5 bg-purple-600 rounded flex items-center justify-center flex-shrink-0">
+                  <Mail className="w-3 h-3 text-white" />
+                </div>
+                <span className="text-sm font-bold text-gray-800">Open in Yahoo Mail</span>
+              </a>
+
+              {/* Fallback */}
+              <a
+                href={shareReady.urls.mailto}
+                className="flex items-center gap-3 w-full px-4 py-3 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all"
+              >
+                <div className="w-5 h-5 bg-gray-200 rounded flex items-center justify-center flex-shrink-0">
+                  <Mail className="w-3 h-3 text-gray-500" />
+                </div>
+                <span className="text-sm font-bold text-gray-500">Other mail app</span>
+              </a>
             </div>
-          )}
-        </div>
+
+            <button
+              type="button"
+              onClick={handleInviteAnother}
+              className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-200 transition-all"
+            >
+              Invite another agent
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Tabs */}
+            <div className="flex mx-6 mt-4 bg-gray-100 rounded-xl p-1 gap-1">
+              {(['email', 'code'] as const).map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTab(t)}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                    tab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {t === 'email' ? 'Email invite' : 'Invite code'}
+                </button>
+              ))}
+            </div>
+
+            <div className="px-6 py-5">
+              {/* ── Email tab ── */}
+              {tab === 'email' && (
+                <div className="space-y-4">
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    Enter the agent's email. We'll generate a unique 7-day sign-up link — then you choose which email app to send it from.
+                  </p>
+                  <div className="relative group">
+                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-600 transition-colors" />
+                    <input
+                      type="email"
+                      value={inviteEmail}
+                      onChange={e => setInviteEmail(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleGenerateInvite()}
+                      placeholder="agent@gmail.com"
+                      className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleGenerateInvite}
+                    disabled={isSending || !inviteEmail.trim()}
+                    className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all disabled:opacity-50"
+                  >
+                    {isSending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    {isSending ? 'Generating link…' : 'Generate invite link'}
+                  </button>
+                </div>
+              )}
+
+              {/* ── Code tab ── */}
+              {tab === 'code' && (
+                <div className="space-y-4">
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    Share this code with any agent. They enter it on the sign-up page under "I have an invite code" to join your agency instantly.
+                  </p>
+
+                  <div className="bg-gray-50 border border-gray-200 rounded-2xl py-5 px-6 text-center">
+                    <p className="font-mono text-3xl font-black text-gray-900 tracking-[0.3em] select-all">
+                      {joinCode || '———'}
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCopyCode}
+                      disabled={!joinCode}
+                      className="flex-1 flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all disabled:opacity-40"
+                    >
+                      {copiedCode ? <><Check className="w-4 h-4" /> Copied!</> : <><Copy className="w-4 h-4" /> Copy code</>}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRegenCode}
+                      disabled={isRegen}
+                      className="flex items-center gap-2 px-4 py-3 bg-gray-100 text-gray-600 rounded-xl text-sm font-bold hover:bg-gray-200 transition-all disabled:opacity-40"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${isRegen ? 'animate-spin' : ''}`} />
+                      New
+                    </button>
+                  </div>
+
+                  <p className="text-[11px] text-gray-400 text-center leading-relaxed">
+                    Regenerating immediately invalidates the old code.
+                  </p>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </motion.div>
     </motion.div>
   );
