@@ -102,7 +102,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'PropPost Invites <onboarding@resend.dev>',
+        from: 'PropPost Invites <invites@proppost.co.za>',
         to: [to],
         subject: `${agencyName} invited you to join PropPost`,
         html,
