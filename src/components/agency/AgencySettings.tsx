@@ -121,34 +121,43 @@ export default function AgencySettings() {
     if (!agencyId) return;
     setIsInviting(true);
     try {
-      const token = crypto.randomUUID();
+      const token     = crypto.randomUUID();
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-      const { error } = await supabase.from('invites').insert({
-        agency_id: agencyId,
-        invitee_email: email,
-        token,
-        expires_at: expiresAt,
+      const { error: dbError } = await supabase.from('invites').insert({
+        agency_id: agencyId, invitee_email: email, token, expires_at: expiresAt,
       });
-      if (error) throw error;
+      if (dbError) throw dbError;
 
-      const agencyName = user?.agency_name || user?.name || 'our agency';
+      const name = user?.agency_name || user?.name || 'our agency';
       const link = `${window.location.origin}/signup?invite=${token}`;
-      const subject = `You're invited to join ${agencyName} on PropPost`;
-      const body = `Hi,\n\nYou have been invited to join ${agencyName} on PropPost — South Africa's real estate marketing platform.\n\nClick the link below to create your agent account:\n\n${link}\n\nThis invite expires in 7 days.\n\nBest regards,\n${agencyName}`;
-      const s = encodeURIComponent(subject);
-      const b = encodeURIComponent(body);
-      const e = encodeURIComponent(email);
 
-      await navigator.clipboard.writeText(link).catch(() => {});
-      setShareReady({
-        email, link,
-        gmail:   `https://mail.google.com/mail/?view=cm&fs=1&to=${e}&su=${s}&body=${b}`,
-        outlook: `https://outlook.live.com/mail/0/deeplink/compose?to=${e}&subject=${s}&body=${b}`,
-        yahoo:   `https://compose.mail.yahoo.com/?to=${e}&subject=${s}&body=${b}`,
-        mailto:  `mailto:${email}?subject=${s}&body=${b}`,
+      // Try to auto-send via edge function
+      const { error: fnError } = await supabase.functions.invoke('send-invite', {
+        body: { to: email, agencyName: name, inviteLink: link },
       });
-      loadPendingInvites();
+
+      if (fnError) {
+        console.warn('send-invite function failed, falling back to share panel:', fnError);
+        const subject = `You're invited to join ${name} on PropPost`;
+        const body    = `Hi,\n\nYou have been invited to join ${name} on PropPost.\n\nSign up here:\n\n${link}\n\nThis invite expires in 7 days.\n\nBest regards,\n${name}`;
+        const s = encodeURIComponent(subject);
+        const b = encodeURIComponent(body);
+        const e = encodeURIComponent(email);
+        await navigator.clipboard.writeText(link).catch(() => {});
+        setShareReady({
+          email, link,
+          gmail:   `https://mail.google.com/mail/?view=cm&fs=1&to=${e}&su=${s}&body=${b}`,
+          outlook: `https://outlook.live.com/mail/0/deeplink/compose?to=${e}&subject=${s}&body=${b}`,
+          yahoo:   `https://compose.mail.yahoo.com/?to=${e}&subject=${s}&body=${b}`,
+          mailto:  `mailto:${email}?subject=${s}&body=${b}`,
+        });
+        toast.warning('Auto-send unavailable — choose your email app below.');
+      } else {
+        toast.success(`Invitation sent to ${email}!`);
+        setInviteEmail('');
+        loadPendingInvites();
+      }
     } catch (err: any) {
       toast.error(err.message || 'Failed to create invite');
     } finally {

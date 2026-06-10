@@ -131,20 +131,31 @@ function InviteModal({
     try {
       const token     = crypto.randomUUID();
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-      const { error } = await supabase.from('invites').insert({
+      const { error: dbError } = await supabase.from('invites').insert({
         agency_id: agencyId, invitee_email: email, token, expires_at: expiresAt,
       });
-      if (error) throw error;
+      if (dbError) throw dbError;
 
-      const link    = `${window.location.origin}/signup?invite=${token}`;
-      const subject = `You're invited to join ${agencyName} on PropPost`;
-      const body    = `Hi,\n\nYou've been invited to join ${agencyName} on PropPost — South Africa's real estate marketing platform.\n\nClick the link below to create your agent account:\n\n${link}\n\nThis link expires in 7 days.\n\nBest,\n${agencyName}`;
+      const link = `${window.location.origin}/signup?invite=${token}`;
 
-      // Auto-copy the link so the agent can paste it anywhere
-      await navigator.clipboard.writeText(link).catch(() => {});
+      // Try to send automatically via the edge function
+      const { error: fnError } = await supabase.functions.invoke('send-invite', {
+        body: { to: email, agencyName, inviteLink: link },
+      });
 
-      setShareReady({ email, link, urls: buildEmailUrls(email, subject, body) });
-      onInviteSent();
+      if (fnError) {
+        // Edge function failed — fall back to the email client chooser
+        console.warn('send-invite function failed, falling back to share panel:', fnError);
+        const subject = `You're invited to join ${agencyName} on PropPost`;
+        const body    = `Hi,\n\nYou've been invited to join ${agencyName} on PropPost.\n\nSign up here:\n\n${link}\n\nThis link expires in 7 days.\n\nBest,\n${agencyName}`;
+        await navigator.clipboard.writeText(link).catch(() => {});
+        setShareReady({ email, link, urls: buildEmailUrls(email, subject, body) });
+        toast.warning('Auto-send unavailable — choose your email app below.');
+      } else {
+        toast.success(`Invitation sent to ${email}!`);
+        setInviteEmail('');
+        onInviteSent();
+      }
     } catch (err: any) {
       toast.error(err.message || 'Failed to create invite');
     } finally {
