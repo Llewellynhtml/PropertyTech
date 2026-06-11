@@ -23,8 +23,23 @@ export default function Login() {
   const { session, user } = useAuth();
   const navigate = useNavigate();
 
+  // When the link has ?invite=TOKEN, force the agent signup form regardless of
+  // who is currently logged in — the recipient of the invite needs to register.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('invite')) {
+      setIsSignIn(false);
+      setActiveRole('agent');
+    }
+  }, [location.search]);
+
   useEffect(() => {
     if (!session) return;
+
+    // Never redirect away when an invite token is present — the invitee must
+    // complete signup even if another user is already signed in on this device.
+    const params = new URLSearchParams(location.search);
+    if (params.get('invite')) return;
 
     if (user) {
       navigate(user.role === 'agency' ? '/agency-dashboard' : '/agent-dashboard');
@@ -41,7 +56,7 @@ export default function Login() {
       navigate('/agent-dashboard');
     }
     // Otherwise stay on /login; the console will show why fetchUserProfile failed.
-  }, [session, user, navigate]);
+  }, [session, user, navigate, location.search]);
 
   useEffect(() => {
     localStorage.setItem('proppost_auth_role', activeRole);
