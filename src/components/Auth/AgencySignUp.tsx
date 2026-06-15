@@ -140,8 +140,9 @@ export default function AgencySignUp({ onToggle }: AgencySignUpProps) {
       if (!form.tradingName.trim())  { toast.error('Trading name is required'); return false; }
       if (!form.province)            { toast.error('Please select a province'); return false; }
       if (!form.city.trim())         { toast.error('City is required'); return false; }
-      if (!form.officePhone.trim())  { toast.error('Office phone is required'); return false; }
-      if (!form.agentCount)          { toast.error('Please select your team size'); return false; }
+      if (!form.officePhone.trim())    { toast.error('Office phone is required'); return false; }
+      if (!form.officeAddress.trim()) { toast.error('Office address is required'); return false; }
+      if (!form.agentCount)           { toast.error('Please select your team size'); return false; }
     }
     if (step === 2) {
       if (!form.firstName.trim())    { toast.error('First name is required'); return false; }
@@ -277,9 +278,9 @@ export default function AgencySignUp({ onToggle }: AgencySignUpProps) {
               </div>
             </Field>
 
-            <Field label="Office address" hint="Full street address (optional)">
+            <Field label="Office address" required hint="Full street address">
               <TextInput id="officeAddress" value={form.officeAddress} onChange={v => set('officeAddress', v)}
-                placeholder="12 Sandton Drive, Sandton, 2196" icon={MapPin} />
+                placeholder="12 Sandton Drive, Sandton, 2196" icon={MapPin} required />
             </Field>
 
             <Field label="Number of agents" required hint="Helps us suggest the right plan for your team">
