@@ -361,7 +361,7 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
       toast.success(
         joinMethod === 'request'
           ? 'Request sent! Your agency admin will review and approve you.'
-          : 'Account created! Check your email to verify.'
+          : `Account created! Check ${form.email} to verify your account.`
       );
     } catch (err: any) {
       console.error('Agent signup error:', err);

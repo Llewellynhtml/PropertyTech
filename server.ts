@@ -1,9 +1,11 @@
 import "dotenv/config";
 import express from "express";
 import path from "path";
+import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
 
-// Note: __filename and __dirname are globals in CommonJS, no import.meta needed.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function startServer() {
   console.log(`Starting server in ${process.env.NODE_ENV || "development"} mode`);
