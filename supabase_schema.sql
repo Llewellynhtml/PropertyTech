@@ -137,15 +137,43 @@ BEGIN
 
   IF (role_name = 'agency') THEN
     BEGIN
-      INSERT INTO public.agencies (id, agency_name, email, join_code, plan)
+      INSERT INTO public.agencies (
+        id, agency_name, trading_name, email, office_number,
+        province, city, address, website_url, agent_count_range,
+        join_code, plan, plan_agent_limit, plan_post_limit,
+        plan_platform_limit, trial_ends_at
+      )
       VALUES (
         new.id,
         COALESCE(new.raw_user_meta_data->>'agencyName', new.raw_user_meta_data->>'agency_name', 'New Agency'),
+        new.raw_user_meta_data->>'trading_name',
         new.email,
+        new.raw_user_meta_data->>'office_number',
+        new.raw_user_meta_data->>'province',
+        new.raw_user_meta_data->>'city',
+        new.raw_user_meta_data->>'address',
+        COALESCE(new.raw_user_meta_data->>'website', new.raw_user_meta_data->>'website_url'),
+        new.raw_user_meta_data->>'agent_count',
         COALESCE(new.raw_user_meta_data->>'joinCode', new.raw_user_meta_data->>'join_code', upper(substring(gen_random_uuid()::text from 1 for 8))),
-        COALESCE(new.raw_user_meta_data->>'plan', 'free')
+        COALESCE(new.raw_user_meta_data->>'plan', 'free'),
+        NULLIF(new.raw_user_meta_data->>'plan_agent_limit', '')::integer,
+        NULLIF(new.raw_user_meta_data->>'plan_post_limit', '')::integer,
+        NULLIF(new.raw_user_meta_data->>'plan_platform_limit', '')::integer,
+        NULLIF(new.raw_user_meta_data->>'trial_ends_at', '')::timestamptz
       )
-      ON CONFLICT (id) DO NOTHING;
+      ON CONFLICT (id) DO UPDATE SET
+        trading_name      = COALESCE(EXCLUDED.trading_name,      agencies.trading_name),
+        office_number     = COALESCE(EXCLUDED.office_number,     agencies.office_number),
+        province          = COALESCE(EXCLUDED.province,          agencies.province),
+        city              = COALESCE(EXCLUDED.city,              agencies.city),
+        address           = COALESCE(EXCLUDED.address,           agencies.address),
+        website_url       = COALESCE(EXCLUDED.website_url,       agencies.website_url),
+        agent_count_range = COALESCE(EXCLUDED.agent_count_range, agencies.agent_count_range),
+        plan              = COALESCE(EXCLUDED.plan,              agencies.plan),
+        plan_agent_limit  = COALESCE(EXCLUDED.plan_agent_limit,  agencies.plan_agent_limit),
+        plan_post_limit   = COALESCE(EXCLUDED.plan_post_limit,   agencies.plan_post_limit),
+        plan_platform_limit = COALESCE(EXCLUDED.plan_platform_limit, agencies.plan_platform_limit),
+        trial_ends_at     = COALESCE(EXCLUDED.trial_ends_at,     agencies.trial_ends_at);
     EXCEPTION WHEN others THEN
       RETURN new;
     END;
@@ -229,19 +257,43 @@ BEGIN
       ON CONFLICT (id) DO NOTHING;
 
     ELSIF (new.raw_user_meta_data->>'role' = 'agency') THEN
-      INSERT INTO public.agencies (id, agency_name, email, join_code, plan)
+      INSERT INTO public.agencies (
+        id, agency_name, trading_name, email, office_number,
+        province, city, address, website_url, agent_count_range,
+        join_code, plan, plan_agent_limit, plan_post_limit,
+        plan_platform_limit, trial_ends_at
+      )
       VALUES (
         new.id,
         COALESCE(new.raw_user_meta_data->>'agencyName', new.raw_user_meta_data->>'agency_name', 'New Agency'),
+        new.raw_user_meta_data->>'trading_name',
         new.email,
-        COALESCE(
-          new.raw_user_meta_data->>'joinCode',
-          new.raw_user_meta_data->>'join_code',
-          upper(substring(gen_random_uuid()::text from 1 for 8))
-        ),
-        COALESCE(new.raw_user_meta_data->>'plan', 'free')
+        new.raw_user_meta_data->>'office_number',
+        new.raw_user_meta_data->>'province',
+        new.raw_user_meta_data->>'city',
+        new.raw_user_meta_data->>'address',
+        COALESCE(new.raw_user_meta_data->>'website', new.raw_user_meta_data->>'website_url'),
+        new.raw_user_meta_data->>'agent_count',
+        COALESCE(new.raw_user_meta_data->>'joinCode', new.raw_user_meta_data->>'join_code', upper(substring(gen_random_uuid()::text from 1 for 8))),
+        COALESCE(new.raw_user_meta_data->>'plan', 'free'),
+        NULLIF(new.raw_user_meta_data->>'plan_agent_limit', '')::integer,
+        NULLIF(new.raw_user_meta_data->>'plan_post_limit', '')::integer,
+        NULLIF(new.raw_user_meta_data->>'plan_platform_limit', '')::integer,
+        NULLIF(new.raw_user_meta_data->>'trial_ends_at', '')::timestamptz
       )
-      ON CONFLICT (id) DO NOTHING;
+      ON CONFLICT (id) DO UPDATE SET
+        trading_name      = COALESCE(EXCLUDED.trading_name,      agencies.trading_name),
+        office_number     = COALESCE(EXCLUDED.office_number,     agencies.office_number),
+        province          = COALESCE(EXCLUDED.province,          agencies.province),
+        city              = COALESCE(EXCLUDED.city,              agencies.city),
+        address           = COALESCE(EXCLUDED.address,           agencies.address),
+        website_url       = COALESCE(EXCLUDED.website_url,       agencies.website_url),
+        agent_count_range = COALESCE(EXCLUDED.agent_count_range, agencies.agent_count_range),
+        plan              = COALESCE(EXCLUDED.plan,              agencies.plan),
+        plan_agent_limit  = COALESCE(EXCLUDED.plan_agent_limit,  agencies.plan_agent_limit),
+        plan_post_limit   = COALESCE(EXCLUDED.plan_post_limit,   agencies.plan_post_limit),
+        plan_platform_limit = COALESCE(EXCLUDED.plan_platform_limit, agencies.plan_platform_limit),
+        trial_ends_at     = COALESCE(EXCLUDED.trial_ends_at,     agencies.trial_ends_at);
     END IF;
 
   END IF;
