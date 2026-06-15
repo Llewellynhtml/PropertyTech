@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
+import { toast } from 'sonner';
 import AuthHero from '../components/Auth/AuthHero';
 import RoleSwitcher from '../components/Auth/RoleSwitcher';
 import AgentSignIn from '../components/Auth/AgentSignIn';
@@ -9,6 +10,7 @@ import AgencySignIn from '../components/Auth/AgencySignIn';
 import AgentSignUp from '../components/Auth/AgentSignUp';
 import AgencySignUp from '../components/Auth/AgencySignUp';
 import Logo from '../components/shared/Logo';
+import { supabase } from '../lib/supabaseClient';
 
 export default function Login() {
   const location = useLocation();
@@ -40,6 +42,21 @@ export default function Login() {
     // complete signup even if another user is already signed in on this device.
     const params = new URLSearchParams(location.search);
     if (params.get('invite')) return;
+
+    // Email confirmation callback: Supabase auto-signs the user in when they
+    // click the verification link. Sign them back out so they land on the
+    // sign-in form instead of being silently pushed to the dashboard.
+    const hashParams = new URLSearchParams(window.location.hash.slice(1));
+    if (hashParams.get('type') === 'signup') {
+      const role = (session.user?.user_metadata as Record<string, any> | undefined)?.role as 'agency' | 'agent' | undefined;
+      supabase.auth.signOut().then(() => {
+        window.history.replaceState(null, '', window.location.pathname);
+        setIsSignIn(true);
+        if (role) setActiveRole(role);
+        toast.success('Email confirmed! Sign in to access your account.');
+      });
+      return;
+    }
 
     if (user) {
       navigate(user.role === 'agency' ? '/agency-dashboard' : '/agent-dashboard');
