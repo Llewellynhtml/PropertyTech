@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
-import { SA_PROVINCES, PLAN_LIMITS } from '../../types';
+import { SA_PROVINCES, SA_CITIES_BY_PROVINCE, PLAN_LIMITS } from '../../types';
 
 interface AgencySignUpProps {
   onToggle: () => void;
@@ -251,7 +251,7 @@ export default function AgencySignUp({ onToggle }: AgencySignUpProps) {
             <div className="grid grid-cols-2 gap-3">
               <Field label="Province" required>
                 <div className="relative">
-                  <select value={form.province} onChange={e => set('province', e.target.value)}
+                  <select value={form.province} onChange={e => { set('province', e.target.value); set('city', ''); }}
                     className="w-full py-3 pl-4 pr-8 bg-brand-surface border border-brand-border rounded-xl text-brand-charcoal text-sm focus:ring-2 focus:ring-brand-teal/20 focus:border-brand-teal outline-none appearance-none">
                     <option value="">Select…</option>
                     {SA_PROVINCES.map(p => (
@@ -262,8 +262,21 @@ export default function AgencySignUp({ onToggle }: AgencySignUpProps) {
                 </div>
               </Field>
               <Field label="City" required>
-                <TextInput id="city" value={form.city} onChange={v => set('city', v)}
-                  placeholder="Johannesburg" icon={MapPin} required />
+                <div className="relative">
+                  <select
+                    value={form.city}
+                    onChange={e => set('city', e.target.value)}
+                    disabled={!form.province}
+                    className="w-full py-3 pl-4 pr-8 bg-brand-surface border border-brand-border rounded-xl text-brand-charcoal text-sm focus:ring-2 focus:ring-brand-teal/20 focus:border-brand-teal outline-none appearance-none disabled:opacity-50 disabled:cursor-not-allowed">
+                    <option value="">
+                      {form.province ? 'Select city…' : 'Select province first'}
+                    </option>
+                    {(SA_CITIES_BY_PROVINCE[form.province] || []).map(city => (
+                      <option key={city} value={city}>{city}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-muted pointer-events-none" />
+                </div>
               </Field>
             </div>
 

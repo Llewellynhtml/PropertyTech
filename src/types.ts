@@ -143,6 +143,60 @@ export const SA_PROVINCES = [
   { code: 'NC', name: 'Northern Cape' },
 ];
 
+export const SA_CITIES_BY_PROVINCE: Record<string, string[]> = {
+  GP: [
+    'Johannesburg', 'Pretoria', 'Sandton', 'Midrand', 'Centurion',
+    'Soweto', 'Randburg', 'Roodepoort', 'Benoni', 'Boksburg',
+    'Germiston', 'Krugersdorp', 'Vanderbijlpark', 'Vereeniging',
+    'Alberton', 'Springs', 'Kempton Park', 'Fourways', 'Bryanston',
+    'Edenvale', 'Randfontein', 'Temba', 'Bronkhorstspruit',
+  ],
+  WC: [
+    'Cape Town', 'Stellenbosch', 'Paarl', 'George', 'Knysna',
+    'Mossel Bay', 'Worcester', 'Hermanus', 'Franschhoek', 'Somerset West',
+    'Bellville', 'Mitchells Plain', 'Khayelitsha', 'Simon\'s Town',
+    'Constantia', 'Sea Point', 'Claremont', 'Rondebosch', 'Durbanville',
+    'Brackenfell', 'Strand', 'Langebaan', 'Swellendam', 'Oudtshoorn',
+  ],
+  KZN: [
+    'Durban', 'Pietermaritzburg', 'Richards Bay', 'Newcastle', 'Umhlanga',
+    'Ballito', 'Margate', 'Port Shepstone', 'Ladysmith', 'Empangeni',
+    'Pinetown', 'Amanzimtoti', 'Hillcrest', 'Kloof', 'Westville',
+    'Tongaat', 'Stanger', 'Scottburgh', 'Eshowe', 'Vryheid',
+  ],
+  EC: [
+    'Gqeberha (Port Elizabeth)', 'East London', 'Mthatha', 'Bhisho',
+    'Uitenhage', 'Makhanda (Grahamstown)', 'King William\'s Town',
+    'Queenstown', 'Jeffrey\'s Bay', 'Humansdorp', 'Aliwal North',
+    'Butterworth', 'Cradock', 'Port Alfred', 'Komani',
+  ],
+  FS: [
+    'Bloemfontein', 'Welkom', 'Sasolburg', 'Bethlehem', 'Kroonstad',
+    'Phuthaditjhaba', 'Parys', 'Botshabelo', 'Harrismith', 'Virginia',
+    'Odendaalsrus', 'Ficksburg', 'Ladybrand', 'Thaba Nchu',
+  ],
+  LP: [
+    'Polokwane', 'Tzaneen', 'Phalaborwa', 'Louis Trichardt', 'Mokopane',
+    'Bela-Bela', 'Musina', 'Thohoyandou', 'Giyani', 'Lebowakgomo',
+    'Burgersfort', 'Lephalale', 'Modimolle', 'Thabazimbi',
+  ],
+  MP: [
+    'Mbombela (Nelspruit)', 'eMalahleni (Witbank)', 'Middelburg',
+    'Secunda', 'White River', 'Hazyview', 'Barberton', 'Standerton',
+    'Lydenburg', 'Komatipoort', 'Ermelo', 'Bethal', 'Delmas',
+  ],
+  NW: [
+    'Rustenburg', 'Mahikeng', 'Potchefstroom', 'Klerksdorp', 'Brits',
+    'Hartbeespoort', 'Zeerust', 'Vryburg', 'Lichtenburg', 'Wolmaransstad',
+    'Orkney', 'Stilfontein', 'Schweizer-Reneke',
+  ],
+  NC: [
+    'Kimberley', 'Upington', 'Springbok', 'De Aar', 'Kuruman',
+    'Kathu', 'Colesberg', 'Prieska', 'Calvinia', 'Carnarvon',
+    'Postmasburg', 'Jan Kempdorp',
+  ],
+};
+
 export const PLAN_LIMITS: Record<string, { label: string; price: number; agents: number; posts: number; platforms: number }> = {
   free: { label: 'Starter', price: 0, agents: 3, posts: 5, platforms: 2 },
   growth: { label: 'Growth', price: 499, agents: 15, posts: -1, platforms: 6 },
