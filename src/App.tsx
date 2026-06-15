@@ -79,7 +79,7 @@ function RootRedirect() {
     );
   }
   
-  if (!session || !user) return <Navigate to="/login" replace />;
+  if (!session || !user) return <Navigate to="/signup" replace />;
 
   if (user.role === 'agency') return <Navigate to="/agency-dashboard" replace />;
   return <Navigate to="/agent-dashboard" replace />;
