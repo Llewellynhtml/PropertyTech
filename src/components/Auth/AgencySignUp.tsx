@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Building2, Mail, Phone, Globe, MapPin, Users,
+  Building2, Mail, Phone, MapPin, Users,
   User, Lock, Loader2, ArrowRight, ArrowLeft,
   CheckCircle2, Eye, EyeOff, ChevronDown
 } from 'lucide-react';
@@ -136,20 +136,25 @@ export default function AgencySignUp({ onToggle }: AgencySignUpProps) {
 
   const validateStep = () => {
     if (step === 1) {
-      if (!form.agencyName.trim()) { toast.error('Agency name is required'); return false; }
-      if (!form.province)          { toast.error('Please select a province'); return false; }
-      if (!form.city.trim())       { toast.error('City is required'); return false; }
-      if (!form.officePhone.trim()){ toast.error('Office phone is required'); return false; }
-      if (!form.agentCount)        { toast.error('Please select your team size'); return false; }
+      if (!form.agencyName.trim())   { toast.error('Agency name is required'); return false; }
+      if (!form.tradingName.trim())  { toast.error('Trading name is required'); return false; }
+      if (!form.province)            { toast.error('Please select a province'); return false; }
+      if (!form.city.trim())         { toast.error('City is required'); return false; }
+      if (!form.officePhone.trim())  { toast.error('Office phone is required'); return false; }
+      if (!form.agentCount)          { toast.error('Please select your team size'); return false; }
     }
     if (step === 2) {
-      if (!form.firstName.trim())   { toast.error('First name is required'); return false; }
-      if (!form.lastName.trim())    { toast.error('Last name is required'); return false; }
-      if (!form.adminEmail.trim())  { toast.error('Email is required'); return false; }
-      if (!form.adminPhone.trim())  { toast.error('Mobile number is required'); return false; }
-      if (form.password.length < 8) { toast.error('Password must be at least 8 characters'); return false; }
+      if (!form.firstName.trim())    { toast.error('First name is required'); return false; }
+      if (!form.lastName.trim())     { toast.error('Last name is required'); return false; }
+      if (!form.adminEmail.trim())   { toast.error('Work email is required'); return false; }
+      if (!/\S+@\S+\.\S+/.test(form.adminEmail)) { toast.error('Please enter a valid email address'); return false; }
+      if (!form.adminPhone.trim())   { toast.error('Mobile number is required'); return false; }
+      if (form.password.length < 8)  { toast.error('Password must be at least 8 characters'); return false; }
+      if (!/[A-Z]/.test(form.password)) { toast.error('Password must contain at least one uppercase letter'); return false; }
+      if (!/[0-9]/.test(form.password)) { toast.error('Password must contain at least one number'); return false; }
+      if (!/[^A-Za-z0-9]/.test(form.password)) { toast.error('Password must contain at least one special character'); return false; }
       if (form.password !== form.confirmPassword) { toast.error('Passwords do not match'); return false; }
-      if (!form.termsAccepted)      { toast.error('Please accept the Terms of Service'); return false; }
+      if (!form.termsAccepted)       { toast.error('Please accept the Terms of Service'); return false; }
     }
     return true;
   };
@@ -237,9 +242,9 @@ export default function AgencySignUp({ onToggle }: AgencySignUpProps) {
                 placeholder="Acme Realty Group" icon={Building2} required />
             </Field>
 
-            <Field label="Trading name / DBA" hint="Shorter display name shown on social posts, if different">
+            <Field label="Trading name / DBA" required hint="Shorter display name shown on social posts, if different">
               <TextInput id="tradingName" value={form.tradingName} onChange={v => set('tradingName', v)}
-                placeholder="Acme Realty" icon={Building2} />
+                placeholder="Acme Realty" icon={Building2} required />
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
@@ -272,16 +277,10 @@ export default function AgencySignUp({ onToggle }: AgencySignUpProps) {
               </div>
             </Field>
 
-            <div className="grid grid-cols-1 gap-3">
-              <Field label="Office address" hint="Full street address (optional)">
-                <TextInput id="officeAddress" value={form.officeAddress} onChange={v => set('officeAddress', v)}
-                  placeholder="12 Sandton Drive, Sandton, 2196" icon={MapPin} />
-              </Field>
-              <Field label="Website" hint="Optional">
-                <TextInput id="website" value={form.website} onChange={v => set('website', v)}
-                  placeholder="www.acmerealty.co.za" icon={Globe} />
-              </Field>
-            </div>
+            <Field label="Office address" hint="Full street address (optional)">
+              <TextInput id="officeAddress" value={form.officeAddress} onChange={v => set('officeAddress', v)}
+                placeholder="12 Sandton Drive, Sandton, 2196" icon={MapPin} />
+            </Field>
 
             <Field label="Number of agents" required hint="Helps us suggest the right plan for your team">
               <div className="flex gap-2 flex-wrap">
