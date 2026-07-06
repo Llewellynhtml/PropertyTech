@@ -2,65 +2,69 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
-import Dashboard from './components/Dashboard';
-import Properties from './components/Properties';
-import Leads from './components/Leads';
-import Analytics from './components/Analytics';
-import Marketing from './components/Marketing';
-import ScheduledPosts from './components/ScheduledPosts';
-import Agents from './components/Agents';
-import Settings from './components/Settings';
-import Onboarding from './components/Onboarding';
 import { UserRole, Agent } from './types';
 import { useAuth } from './contexts/AuthContext';
 import { supabase } from './lib/supabaseClient';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 
-import AgencyDashboard from './components/agency/AgencyDashboard';
-import AgencyAgents from './components/agency/AgencyAgents';
-import AgencyProperties from './components/agency/AgencyProperties';
-import AgencyLeads from './components/agency/AgencyLeads';
-import AgencyAnalytics from './components/agency/AgencyAnalytics';
-import AgencySettings from './components/agency/AgencySettings';
+const Login = React.lazy(() => import('./pages/Login'));
+const Onboarding = React.lazy(() => import('./components/Onboarding'));
+const AddPropertyModal = React.lazy(() => import('./components/shared/AddPropertyModal'));
+const SocialMediaTemplates = React.lazy(() => import('./components/SocialMediaTemplates'));
 
-import AgentDashboard from './components/agent/AgentDashboard';
-import AgentProperties from './components/agent/AgentProperties';
-import AgentLeads from './components/agent/AgentLeads';
-import AgentAnalytics from './components/agent/AgentAnalytics';
-import AgentProfile from './components/agent/AgentProfile';
-import AddPropertyModal from './components/shared/AddPropertyModal';
+const AgencyDashboard = React.lazy(() => import('./components/agency/AgencyDashboard'));
+const AgencyAgents = React.lazy(() => import('./components/agency/AgencyAgents'));
+const AgencyProperties = React.lazy(() => import('./components/agency/AgencyProperties'));
+const AgencyLeads = React.lazy(() => import('./components/agency/AgencyLeads'));
+const AgencyAnalytics = React.lazy(() => import('./components/agency/AgencyAnalytics'));
+const AgencySettings = React.lazy(() => import('./components/agency/AgencySettings'));
 
-import SocialMediaTemplates from './components/SocialMediaTemplates';
+const AgentDashboard = React.lazy(() => import('./components/agent/AgentDashboard'));
+const AgentProperties = React.lazy(() => import('./components/agent/AgentProperties'));
+const AgentLeads = React.lazy(() => import('./components/agent/AgentLeads'));
+const AgentAnalytics = React.lazy(() => import('./components/agent/AgentAnalytics'));
+const AgentProfile = React.lazy(() => import('./components/agent/AgentProfile'));
+const Marketing = React.lazy(() => import('./components/Marketing'));
+const ScheduledPosts = React.lazy(() => import('./components/ScheduledPosts'));
+
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen bg-brand-surface flex items-center justify-center">
+      <div className="w-10 h-10 border-4 border-brand-teal border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
 
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Login />} />
-        
-        {/* Agent Routes */}
-        <Route path="/agent-dashboard/*" element={
-          <ProtectedRoute allowedRoles={['agent']}>
-            <DashboardLayout role="agent" />
-          </ProtectedRoute>
-        } />
+      <React.Suspense fallback={<LoadingScreen />}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Login />} />
+          
+          {/* Agent Routes */}
+          <Route path="/agent-dashboard/*" element={
+            <ProtectedRoute allowedRoles={['agent']}>
+              <DashboardLayout role="agent" />
+            </ProtectedRoute>
+          } />
 
-        {/* Agency Routes */}
-        <Route path="/agency-dashboard/*" element={
-          <ProtectedRoute allowedRoles={['agency']}>
-            <DashboardLayout role="agency" />
-          </ProtectedRoute>
-        } />
+          {/* Agency Routes */}
+          <Route path="/agency-dashboard/*" element={
+            <ProtectedRoute allowedRoles={['agency']}>
+              <DashboardLayout role="agency" />
+            </ProtectedRoute>
+          } />
 
-        {/* Root Redirect */}
-        <Route path="/" element={<RootRedirect />} />
-        
-        {/* Fallback */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          {/* Root Redirect */}
+          <Route path="/" element={<RootRedirect />} />
+          
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </React.Suspense>
     </BrowserRouter>
   );
 }
@@ -250,14 +254,16 @@ function DashboardLayout({ role }: { role: 'agent' | 'agency' }) {
         </div>
       </main>
 
-      <AddPropertyModal 
-        isOpen={isAddPropertyModalOpen} 
-        onClose={() => setIsAddPropertyModalOpen(false)} 
-        onSuccess={() => {
-          setRefreshTrigger(prev => prev + 1);
-          setIsAddPropertyModalOpen(false);
-        }} 
-      />
+      {isAddPropertyModalOpen && (
+        <AddPropertyModal 
+          isOpen={isAddPropertyModalOpen} 
+          onClose={() => setIsAddPropertyModalOpen(false)} 
+          onSuccess={() => {
+            setRefreshTrigger(prev => prev + 1);
+            setIsAddPropertyModalOpen(false);
+          }} 
+        />
+      )}
     </div>
   );
 }

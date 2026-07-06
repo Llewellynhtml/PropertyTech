@@ -283,7 +283,7 @@ export default function AgencySignUp({ onToggle }: AgencySignUpProps) {
             <Field label="Office phone" required>
               <div className="flex gap-2">
                 <div className="flex items-center gap-1.5 px-3 py-3 bg-brand-surface border border-brand-border rounded-xl text-sm text-brand-muted flex-shrink-0">
-                  <span className="text-xs">🇿🇦</span><span>+27</span>
+                  <span className="text-[10px] font-black tracking-wider">ZA</span><span>+27</span>
                 </div>
                 <input value={form.officePhone} onChange={e => set('officePhone', e.target.value)}
                   placeholder="11 234 5678" type="tel"
@@ -356,7 +356,7 @@ export default function AgencySignUp({ onToggle }: AgencySignUpProps) {
             <Field label="Mobile number" required hint="Used for 2FA and account recovery. Never shown publicly.">
               <div className="flex gap-2">
                 <div className="flex items-center gap-1.5 px-3 py-3 bg-brand-surface border border-brand-border rounded-xl text-sm text-brand-muted flex-shrink-0">
-                  <span className="text-xs">🇿🇦</span><span>+27</span>
+                  <span className="text-[10px] font-black tracking-wider">ZA</span><span>+27</span>
                 </div>
                 <input value={form.adminPhone} onChange={e => set('adminPhone', e.target.value)}
                   placeholder="82 000 0000" type="tel"

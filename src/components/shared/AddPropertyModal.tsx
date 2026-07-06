@@ -266,7 +266,9 @@ export default function AddPropertyModal({ isOpen, onClose, onSuccess }: any) {
         status: formData.status,
         image_url: finalImageUrls[0], // primary fallback
         image_urls: finalImageUrls,   // multiple gallery items
-        agent_id: user?.id,
+        agent_id: user?.role === 'agent' ? user.id : null,
+        agency_id: user?.agency_id || (user?.role === 'agency' ? user.id : null),
+        created_by_id: user?.id,
         created_by_role: user?.role || 'agent'
       }).select().single();
 

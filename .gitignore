@@ -3,4 +3,12 @@ dist/
 .env
 .env.local
 .env.production
+src/.env
 *.log
+test-results/
+playwright-report/
+PropertyTech-main-extracted/
+.npm-cache/
+PropPost-Test-Credentials.pdf
+generate-credentials-pdf.cjs
+test-credentials.html

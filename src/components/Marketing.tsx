@@ -80,7 +80,12 @@ export default function Marketing({ initialPlatformId, initialFormatId, initialD
     try {
       const { error } = await supabase.from('scheduled_posts').insert({
         property_id: selectedProperty?.id,
+        agent_id: user?.role === 'agent' ? user.id : null,
+        agency_id: selectedProperty?.agency_id || user?.agency_id || (user?.role === 'agency' ? user.id : null),
+        property_title: selectedProperty?.title,
+        agent_name: user?.name,
         platform,
+        platforms: [platform],
         caption: generatedPost.body,
         scheduled_at: scheduledDate,
         status: 'scheduled'

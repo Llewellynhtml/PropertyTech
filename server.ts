@@ -13,21 +13,29 @@ async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
-  const ai = new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      }
-    }
-  });
-
   app.use(express.json());
   app.use("/uploads", express.static(path.join(__dirname, "public/uploads")));
 
   // API Routes
   app.post("/api/generate-post", async (req, res) => {
     try {
+      if (process.env.E2E_DISABLE_GEMINI === "true") {
+        return res.status(503).json({ error: "Gemini API is disabled for smoke tests." });
+      }
+
+      if (!process.env.GEMINI_API_KEY) {
+        return res.status(503).json({ error: "Gemini API key is not configured." });
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey: process.env.GEMINI_API_KEY,
+        httpOptions: {
+          headers: {
+            "User-Agent": "proppost-local",
+          },
+        },
+      });
+
       const { property, agent, platform, tone } = req.body;
       
       const prompt = `Generate a highly engaging ${platform} post for a real estate listing.
@@ -73,6 +81,8 @@ async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
+      configFile: path.resolve(__dirname, "vite.config.mjs"),
+      configLoader: "native",
       server: { middlewareMode: true },
       appType: "spa",
     });

@@ -698,7 +698,7 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
             <Field label="Mobile number" required hint="Displayed on your listings. Clients will contact you on this number.">
               <div className="flex gap-2">
                 <div className="flex items-center gap-1.5 px-3 py-3 bg-brand-surface border border-brand-border rounded-xl text-sm text-brand-muted flex-shrink-0">
-                  <span className="text-xs">🇿🇦</span><span>+27</span>
+                  <span className="text-[10px] font-black tracking-wider">ZA</span><span>+27</span>
                 </div>
                 <input value={form.cellphone} onChange={e => set('cellphone', e.target.value)}
                   placeholder="82 123 4567" type="tel"
@@ -783,7 +783,7 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
             <div className="grid grid-cols-2 gap-3">
               <Field label="WhatsApp" optional>
                 <div className="flex gap-1">
-                  <div className="flex items-center px-2 py-3 bg-brand-surface border border-brand-border rounded-xl text-xs text-brand-muted flex-shrink-0">🇿🇦</div>
+                  <div className="flex items-center px-2 py-3 bg-brand-surface border border-brand-border rounded-xl text-[10px] font-black tracking-wider text-brand-muted flex-shrink-0">ZA</div>
                   <input value={form.whatsappNumber} onChange={e => set('whatsappNumber', e.target.value)}
                     placeholder="82 123 4567" type="tel"
                     className="flex-1 py-3 px-3 bg-brand-surface border border-brand-border rounded-xl text-brand-charcoal text-sm focus:ring-2 focus:ring-brand-teal/20 focus:border-brand-teal outline-none" />
