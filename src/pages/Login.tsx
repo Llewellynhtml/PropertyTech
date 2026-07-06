@@ -91,8 +91,8 @@ export default function Login() {
       {/* Right Panel - Form */}
       <div className="flex flex-col items-center justify-center p-6 lg:p-12 overflow-y-auto">
         {/* Mobile Logo Bar */}
-        <div className="lg:hidden flex items-center justify-center mb-12 bg-brand-charcoal p-6 rounded-3xl shadow-xl border border-white/5 w-full max-w-[280px]">
-          <Logo className="h-24 w-auto" variant="light" />
+        <div className="lg:hidden flex items-center justify-center mb-10 overflow-hidden rounded-3xl shadow-xl border border-white/5 w-full max-w-sm">
+          <Logo className="aspect-[1784/968] w-full" variant="light" src="/proppost-logo-mobile.png" />
         </div>
 
         <div className="w-full max-w-md">

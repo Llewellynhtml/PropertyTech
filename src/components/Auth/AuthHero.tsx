@@ -49,7 +49,7 @@ export default function AuthHero({
       
       {/* Logo */}
       <div className="relative z-10">
-        <Logo className="h-20 w-auto" variant="light" />
+        <Logo className="h-40 w-full max-w-lg" variant="light" />
       </div>
 
       {/* Center Content */}
