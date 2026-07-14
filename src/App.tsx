@@ -9,6 +9,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 
 const Login = React.lazy(() => import('./pages/Login'));
+const ConfirmSignup = React.lazy(() => import('./pages/ConfirmSignup'));
 const Onboarding = React.lazy(() => import('./components/Onboarding'));
 const AddPropertyModal = React.lazy(() => import('./components/shared/AddPropertyModal'));
 const SocialMediaTemplates = React.lazy(() => import('./components/SocialMediaTemplates'));
@@ -43,6 +44,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Login />} />
+          <Route path="/auth/confirmed" element={<ConfirmSignup />} />
           
           {/* Agent Routes */}
           <Route path="/agent-dashboard/*" element={

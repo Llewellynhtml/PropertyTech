@@ -41,6 +41,14 @@ test.describe('public auth smoke', () => {
     await expect(page.getByPlaceholder('name@company.com')).toBeVisible();
   });
 
+  test('signup confirmation callback returns to sign in without opening a dashboard', async ({ page }) => {
+    await page.goto('/auth/confirmed');
+
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.getByRole('heading', { name: 'Welcome Back' })).toBeVisible();
+    await expect(page).not.toHaveURL(/dashboard/);
+  });
+
   test('generate-post API returns a JSON contract', async ({ request }) => {
     const response = await request.post('/api/generate-post', {
       data: {
