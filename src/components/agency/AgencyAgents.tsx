@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   Users, UserPlus, Copy, Check, RefreshCw, Mail, Send,
-  Link2, Trash2, Clock, X, Shield, ChevronRight,
+  Link2, Trash2, Clock, X,
   Phone, Briefcase, CheckCircle2, AlertCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -78,22 +78,15 @@ function buildEmailUrls(to: string, subject: string, body: string) {
 
 function InviteModal({
   onClose,
-  joinCode,
   agencyId,
   agencyName,
-  onCodeRegenerated,
   onInviteSent,
 }: {
   onClose: () => void;
-  joinCode: string;
   agencyId: string;
   agencyName: string;
-  onCodeRegenerated: (code: string) => void;
   onInviteSent: () => void;
 }) {
-  const [tab, setTab]                 = useState<'code' | 'email'>('email');
-  const [copiedCode, setCopiedCode]   = useState(false);
-  const [isRegen, setIsRegen]         = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [isSending, setIsSending]     = useState(false);
   const [copiedLink, setCopiedLink]   = useState(false);
@@ -105,21 +98,6 @@ function InviteModal({
     urls: ReturnType<typeof buildEmailUrls>;
   } | null>(null);
 
-  const handleCopyCode = async () => {
-    await navigator.clipboard.writeText(joinCode);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2000);
-    toast.success('Code copied!');
-  };
-
-  const handleRegenCode = async () => {
-    setIsRegen(true);
-    const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const { error } = await supabase.from('agencies').update({ join_code: newCode }).eq('id', agencyId);
-    if (error) { toast.error('Failed to regenerate'); }
-    else { onCodeRegenerated(newCode); toast.success('New code generated'); }
-    setIsRegen(false);
-  };
 
   const handleGenerateInvite = async () => {
     const email = inviteEmail.trim().toLowerCase();
@@ -304,27 +282,8 @@ function InviteModal({
             </button>
           </div>
         ) : (
-          <>
-            {/* Tabs */}
-            <div className="flex mx-6 mt-4 bg-gray-100 rounded-xl p-1 gap-1">
-              {(['email', 'code'] as const).map(t => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setTab(t)}
-                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
-                    tab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  {t === 'email' ? 'Email invite' : 'Invite code'}
-                </button>
-              ))}
-            </div>
-
-            <div className="px-6 py-5">
-              {/* ── Email tab ── */}
-              {tab === 'email' && (
-                <div className="space-y-4">
+          <div className="px-6 py-5">
+            <div className="space-y-4">
                   <p className="text-xs text-gray-500 leading-relaxed">
                     Enter the agent's email. We'll generate a unique 7-day sign-up link — then you choose which email app to send it from.
                   </p>
@@ -348,49 +307,8 @@ function InviteModal({
                     {isSending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                     {isSending ? 'Generating link…' : 'Generate invite link'}
                   </button>
-                </div>
-              )}
-
-              {/* ── Code tab ── */}
-              {tab === 'code' && (
-                <div className="space-y-4">
-                  <p className="text-xs text-gray-500 leading-relaxed">
-                    Share this code with any agent. They enter it on the sign-up page under "I have an invite code" to join your agency instantly.
-                  </p>
-
-                  <div className="bg-gray-50 border border-gray-200 rounded-2xl py-5 px-6 text-center">
-                    <p className="font-mono text-3xl font-black text-gray-900 tracking-[0.3em] select-all">
-                      {joinCode || '———'}
-                    </p>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={handleCopyCode}
-                      disabled={!joinCode}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all disabled:opacity-40"
-                    >
-                      {copiedCode ? <><Check className="w-4 h-4" /> Copied!</> : <><Copy className="w-4 h-4" /> Copy code</>}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleRegenCode}
-                      disabled={isRegen}
-                      className="flex items-center gap-2 px-4 py-3 bg-gray-100 text-gray-600 rounded-xl text-sm font-bold hover:bg-gray-200 transition-all disabled:opacity-40"
-                    >
-                      <RefreshCw className={`w-4 h-4 ${isRegen ? 'animate-spin' : ''}`} />
-                      New
-                    </button>
-                  </div>
-
-                  <p className="text-[11px] text-gray-400 text-center leading-relaxed">
-                    Regenerating immediately invalidates the old code.
-                  </p>
-                </div>
-              )}
             </div>
-          </>
+          </div>
         )}
       </motion.div>
     </motion.div>
@@ -405,7 +323,6 @@ export default function AgencyAgents() {
 
   const [agents, setAgents]               = useState<Agent[]>([]);
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
-  const [joinCode, setJoinCode]           = useState('');
   const [loadingAgents, setLoadingAgents] = useState(true);
   const [loadingInvites, setLoadingInvites] = useState(true);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -437,21 +354,10 @@ export default function AgencyAgents() {
     setLoadingInvites(false);
   }, [agencyId]);
 
-  const loadJoinCode = useCallback(async () => {
-    if (!agencyId) return;
-    const { data } = await supabase
-      .from('agencies')
-      .select('join_code')
-      .eq('id', agencyId)
-      .maybeSingle();
-    if (data?.join_code) setJoinCode(data.join_code);
-  }, [agencyId]);
-
   useEffect(() => {
     loadAgents();
     loadInvites();
-    loadJoinCode();
-  }, [loadAgents, loadInvites, loadJoinCode]);
+  }, [loadAgents, loadInvites]);
 
   const handleCopyInviteLink = async (token: string) => {
     const link = `${window.location.origin}/signup?invite=${token}`;
@@ -501,27 +407,6 @@ export default function AgencyAgents() {
           >
             <UserPlus className="w-4 h-4" />
             Invite agent
-          </button>
-        </div>
-
-        {/* ── Invite-code quick glance banner ── */}
-        <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 rounded-2xl p-5 flex items-center gap-5">
-          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-            <Shield className="w-5 h-5 text-white" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-indigo-100 uppercase tracking-widest mb-1">Your invite code</p>
-            <p className="font-mono text-2xl font-black text-white tracking-[0.2em]">
-              {joinCode || '———'}
-            </p>
-            <p className="text-xs text-indigo-200 mt-1">Share this with any agent to let them join instantly.</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowInviteModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-xl text-xs font-bold transition-all flex-shrink-0"
-          >
-            Invite <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
 
@@ -679,10 +564,8 @@ export default function AgencyAgents() {
         {showInviteModal && (
           <InviteModal
             onClose={() => setShowInviteModal(false)}
-            joinCode={joinCode}
             agencyId={agencyId!}
             agencyName={user?.agency_name || user?.name || 'Your agency'}
-            onCodeRegenerated={setJoinCode}
             onInviteSent={() => { loadInvites(); setShowInviteModal(false); }}
           />
         )}

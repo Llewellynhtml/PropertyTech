@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   Copy, Check, RefreshCw, Mail, Send, Trash2, Clock,
-  Link2, Users, Shield,
+  Link2, Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabaseClient';
@@ -42,10 +42,6 @@ export default function AgencySettings() {
   const { user } = useAuth();
   const agencyId = user?.id;
 
-  const [joinCode, setJoinCode] = useState('');
-  const [isRegenerating, setIsRegenerating] = useState(false);
-  const [copiedCode, setCopiedCode] = useState(false);
-
   const [inviteEmail, setInviteEmail] = useState('');
   const [isInviting, setIsInviting] = useState(false);
   const [shareReady, setShareReady] = useState<{
@@ -58,16 +54,6 @@ export default function AgencySettings() {
   const [loadingInvites, setLoadingInvites] = useState(true);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
-
-  const loadJoinCode = useCallback(async () => {
-    if (!agencyId) return;
-    const { data } = await supabase
-      .from('agencies')
-      .select('join_code')
-      .eq('id', agencyId)
-      .maybeSingle();
-    if (data?.join_code) setJoinCode(data.join_code);
-  }, [agencyId]);
 
   const loadPendingInvites = useCallback(async () => {
     if (!agencyId) return;
@@ -83,34 +69,8 @@ export default function AgencySettings() {
   }, [agencyId]);
 
   useEffect(() => {
-    loadJoinCode();
     loadPendingInvites();
-  }, [loadJoinCode, loadPendingInvites]);
-
-  const handleCopyCode = async () => {
-    if (!joinCode) return;
-    await navigator.clipboard.writeText(joinCode);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2000);
-    toast.success('Invite code copied!');
-  };
-
-  const handleRegenerateCode = async () => {
-    if (!agencyId) return;
-    setIsRegenerating(true);
-    const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const { error } = await supabase
-      .from('agencies')
-      .update({ join_code: newCode })
-      .eq('id', agencyId);
-    if (error) {
-      toast.error('Failed to regenerate code');
-    } else {
-      setJoinCode(newCode);
-      toast.success('New invite code generated');
-    }
-    setIsRegenerating(false);
-  };
+  }, [loadPendingInvites]);
 
   const handleGenerateInvite = async () => {
     const email = inviteEmail.trim().toLowerCase();
@@ -202,45 +162,6 @@ export default function AgencySettings() {
         <h1 className="text-2xl font-display font-bold text-gray-900 tracking-tight">Agent Invites</h1>
         <p className="text-sm text-gray-400 mt-1">Invite agents to join your agency on PropPost.</p>
       </div>
-
-      {/* ── Invite code ── */}
-      <Card>
-        <SectionHeader
-          icon={Shield}
-          title="Invite Code"
-          subtitle="Share this code with agents — they enter it during sign-up to join your agency instantly."
-        />
-
-        <div className="flex items-center gap-3">
-          <div className="flex-1 bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 font-mono text-2xl font-black text-gray-900 tracking-[0.25em] text-center select-all">
-            {joinCode || '——————'}
-          </div>
-          <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={handleCopyCode}
-              disabled={!joinCode}
-              className="flex items-center gap-2 px-4 py-3 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all disabled:opacity-40"
-            >
-              {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              {copiedCode ? 'Copied' : 'Copy'}
-            </button>
-            <button
-              type="button"
-              onClick={handleRegenerateCode}
-              disabled={isRegenerating}
-              className="flex items-center gap-2 px-4 py-3 bg-gray-100 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-200 transition-all disabled:opacity-40"
-            >
-              <RefreshCw className={`w-4 h-4 ${isRegenerating ? 'animate-spin' : ''}`} />
-              New code
-            </button>
-          </div>
-        </div>
-
-        <p className="text-[11px] text-gray-400 mt-3 leading-relaxed">
-          Regenerating the code immediately invalidates the old one. Agents who haven't finished signing up will need the new code.
-        </p>
-      </Card>
 
       {/* ── Invite by email ── */}
       <Card>
