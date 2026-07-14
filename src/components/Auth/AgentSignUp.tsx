@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Mail, Lock, User, Phone, Briefcase, Loader2, ArrowRight, ArrowLeft,
-  CheckCircle2, Eye, EyeOff, Instagram, AlertCircle
+  CheckCircle2, Eye, EyeOff, Instagram
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -427,16 +427,6 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
                     </p>
                   </div>
                 )}
-              </div>
-            )}
-
-            {/* Independent path info */}
-            {joinMethod === 'independent' && (
-              <div className="flex gap-2.5 items-start p-3 bg-brand-teal-light border border-brand-teal/20 rounded-xl">
-                <AlertCircle size={14} className="text-brand-teal mt-0.5 flex-shrink-0" />
-                <p className="text-[11px] text-brand-teal-dark leading-relaxed">
-                  You'll have limited features until you join an agency. You can connect anytime from Settings in your dashboard.
-                </p>
               </div>
             )}
 
