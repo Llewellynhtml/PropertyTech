@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Mail, Lock, User, Phone, Briefcase, Loader2, ArrowRight, ArrowLeft,
   CheckCircle2, Eye, EyeOff, Search, MapPin, Instagram, X, AlertCircle, Clock
@@ -13,15 +13,11 @@ interface AgentSignUpProps {
   onToggle: () => void;
 }
 
-// ─── An agent MUST be connected to an agency to sign up. ───────────────────────
-// Three paths — all require the agency to be confirmed BEFORE the form proceeds:
-//   1. invite_code  → validated live; only "valid" passes
-//   2. email_invite → token in URL pre-resolves the agency; no token = blocked
-//   3. request      → agent picks an agency and submits; account created as "pending"
-//                      but agency_id is always set (not null)
+// Agents can join through an email invitation, request an agency connection,
+// or create an independent account and connect to an agency later.
 // ──────────────────────────────────────────────────────────────────────────────
 
-type JoinMethod = 'code' | 'email_invite' | 'request' | 'independent';
+type JoinMethod = 'email_invite' | 'request' | 'independent';
 
 const SPECIALISATIONS = [
   'Residential Sales', 'Rentals', 'Commercial',
@@ -136,8 +132,7 @@ function PasswordStrength({ password }: { password: string }) {
 
 // ─── Agency confirmation badge (reused across join paths) ────────────────────
 function AgencyBadge({ name, city, method }: { name: string; city?: string; method: JoinMethod }) {
-  const methodLabel = method === 'code' ? 'Joining via invite code'
-    : method === 'email_invite' ? 'Joining via email invite'
+  const methodLabel = method === 'email_invite' ? 'Joining via email invite'
     : 'Request pending approval';
   return (
     <div className="flex items-center gap-3 p-3 bg-brand-teal-light border border-brand-teal/30 rounded-xl">
@@ -158,18 +153,16 @@ function AgencyBadge({ name, city, method }: { name: string; city?: string; meth
 
 export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
   const [step, setStep]               = useState(0);
-  const [joinMethod, setJoinMethod]   = useState<JoinMethod>('code');
+  const [joinMethod, setJoinMethod]   = useState<JoinMethod>('request');
   const [isLoading, setIsLoading]     = useState(false);
   const [isSuccess, setIsSuccess]     = useState(false);
 
   // Agency state — ALL paths must resolve to a confirmed agency before step 1
-  const [codeStatus, setCodeStatus]   = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
   const [confirmedAgency, setConfirmedAgency] = useState<{
     id: string; name: string; city?: string;
   } | null>(null);
   const [agencySearch, setAgencySearch]   = useState('');
   const [agencyResults, setAgencyResults] = useState<any[]>([]);
-  const codeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Email invite token (resolved from ?invite= URL param on mount)
   const [inviteToken, setInviteToken]           = useState<string | null>(null);
@@ -225,7 +218,6 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [form, setForm] = useState({
-    inviteCode: '',
     firstName: '', lastName: '',
     email: '', cellphone: '',
     jobTitle: '', ppraNumber: '', bio: '',
@@ -237,30 +229,6 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
 
   const set = (key: keyof typeof form, value: string | boolean) =>
     setForm(prev => ({ ...prev, [key]: value }));
-
-  // ── Live invite code check ──────────────────────────────────────────────────
-  useEffect(() => {
-    if (joinMethod !== 'code') return;
-    const raw = form.inviteCode.trim().toUpperCase();
-    if (!raw) { setCodeStatus('idle'); setConfirmedAgency(null); return; }
-    if (codeTimer.current) clearTimeout(codeTimer.current);
-    setCodeStatus('checking');
-    codeTimer.current = setTimeout(async () => {
-      const { data } = await supabase
-        .from('agencies')
-        .select('id, agency_name, city')
-        .eq('join_code', raw)
-        .maybeSingle();
-      if (data) {
-        setCodeStatus('valid');
-        setConfirmedAgency({ id: data.id, name: data.agency_name, city: data.city });
-      } else {
-        setCodeStatus('invalid');
-        setConfirmedAgency(null);
-      }
-    }, 600);
-    return () => { if (codeTimer.current) clearTimeout(codeTimer.current); };
-  }, [form.inviteCode, joinMethod]);
 
   // ── Agency search (for request path) ───────────────────────────────────────
   useEffect(() => {
@@ -288,7 +256,6 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
   const canLeaveStep0 = (): boolean => {
     if (joinMethod === 'independent')  return true;
     if (joinMethod === 'email_invite') return !!inviteToken && !!confirmedAgency;
-    if (joinMethod === 'code')         return codeStatus === 'valid' && !!confirmedAgency;
     if (joinMethod === 'request')      return !!confirmedAgency;
     return false;
   };
@@ -300,7 +267,6 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
         return false;
       }
       if (!canLeaveStep0()) {
-        if (joinMethod === 'code')    toast.error('Enter a valid invite code before continuing.');
         if (joinMethod === 'request') toast.error('Select an agency to join before continuing.');
         return false;
       }
@@ -329,7 +295,7 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
     try {
       // Resolve the status explicitly per join method so the trigger and the
       // client-side fallback agree. Independent = active immediately; request
-      // = pending until admin approval; code & email_invite = active.
+      // = pending until admin approval; email invitations are active.
       const resolvedStatus =
         joinMethod === 'request' ? 'pending' : 'active';
 
@@ -339,7 +305,6 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
         cellphone: form.cellphone,
         whatsapp_number: form.whatsappNumber || form.cellphone,
         agency_id: confirmedAgency?.id ?? null,
-        agency_code: form.inviteCode || undefined,
         join_method: joinMethod,
         job_title: form.jobTitle,
         ppra_number: form.ppraNumber,
@@ -437,11 +402,6 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
             {/* Join method options */}
             {([
               {
-                id: 'code' as JoinMethod,
-                title: 'I have an invite code',
-                desc: 'Your agency admin shared a code with you.',
-              },
-              {
                 id: 'email_invite' as JoinMethod,
                 title: 'I was invited by email',
                 desc: 'Use the link in your invitation email — it pre-fills everything.',
@@ -458,7 +418,7 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
               },
             ] as const).map(opt => (
               <button key={opt.id} type="button"
-                onClick={() => { setJoinMethod(opt.id); setConfirmedAgency(null); setCodeStatus('idle'); setForm(p => ({ ...p, inviteCode: '' })); setAgencySearch(''); }}
+                onClick={() => { setJoinMethod(opt.id); setConfirmedAgency(null); setAgencySearch(''); }}
                 className={cn(
                   'w-full text-left p-4 rounded-xl border flex gap-3 items-start transition-all',
                   joinMethod === opt.id
@@ -478,46 +438,6 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
               </button>
             ))}
 
-            {/* ── Code entry ── */}
-            {joinMethod === 'code' && (
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-brand-muted uppercase tracking-[0.15em]">
-                  Invite code <span className="text-red-400">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    value={form.inviteCode}
-                    onChange={e => set('inviteCode', e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
-                    placeholder="ACME-X7F2"
-                    maxLength={12}
-                    className={cn(
-                      'w-full py-3.5 px-4 rounded-xl border font-mono text-lg font-bold tracking-widest text-center outline-none transition-all',
-                      codeStatus === 'valid'   && 'border-brand-green bg-green-50 text-brand-green',
-                      codeStatus === 'invalid' && 'border-red-400 bg-red-50 text-red-600',
-                      (codeStatus === 'idle' || codeStatus === 'checking') && 'border-brand-border bg-brand-surface text-brand-charcoal focus:ring-2 focus:ring-brand-teal/20 focus:border-brand-teal',
-                    )}
-                  />
-                  {codeStatus === 'checking' && (
-                    <Loader2 size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 animate-spin text-brand-muted" />
-                  )}
-                </div>
-                {codeStatus === 'valid' && confirmedAgency && (
-                  <AgencyBadge name={confirmedAgency.name} city={confirmedAgency.city} method="code" />
-                )}
-                {codeStatus === 'invalid' && (
-                  <div className="flex gap-2 items-center text-[11px] text-red-500">
-                    <AlertCircle size={12} />
-                    Code not found. Double-check with your agency admin.
-                  </div>
-                )}
-                {codeStatus === 'idle' && (
-                  <p className="text-[11px] text-brand-muted">
-                    Ask your agency admin for the code — they can find it in their dashboard under Settings.
-                  </p>
-                )}
-              </div>
-            )}
-
             {/* ── Email invite ── */}
             {joinMethod === 'email_invite' && (
               <div className="space-y-3">
@@ -535,9 +455,7 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
                       <p className="text-[11px] text-red-500 leading-relaxed">{inviteError}</p>
                     </div>
                     <p className="text-[11px] text-brand-muted text-center">
-                      <button type="button" className="text-brand-teal hover:underline" onClick={() => setJoinMethod('code')}>
-                        Use an invite code instead
-                      </button>
+                      Ask your agency admin to send a new invitation.
                     </p>
                   </div>
                 )}
@@ -554,14 +472,11 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
                       </p>
                       <p className="text-[11px] text-amber-600 leading-relaxed">
                         Find the email from your agency admin and click the <strong>"Accept invitation"</strong> link.
-                        It will bring you back here with your agency already linked — you won't need to fill in a code.
+                        It will bring you back here with your agency already linked.
                       </p>
                     </div>
                     <p className="text-[11px] text-brand-muted text-center">
-                      Can't find the email?{' '}
-                      <button type="button" className="text-brand-teal hover:underline" onClick={() => setJoinMethod('code')}>
-                        Use an invite code instead
-                      </button>
+                      Can't find the email? Ask your agency admin to resend the invitation.
                     </p>
                   </div>
                 )}
@@ -648,8 +563,6 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
                 ? <><Loader2 size={16} className="animate-spin" /> Validating invite…</>
                 : joinMethod === 'email_invite' && !inviteToken
                   ? 'Use the link in your email'
-                : joinMethod === 'code' && codeStatus !== 'valid'
-                  ? 'Enter a valid code to continue'
                 : joinMethod === 'request' && !confirmedAgency
                   ? 'Select an agency to continue'
                   : <><span>Continue</span><ArrowRight size={16} className="group-hover:translate-x-0.5 transition-transform" /></>

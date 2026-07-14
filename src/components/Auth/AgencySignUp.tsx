@@ -213,7 +213,7 @@ export default function AgencySignUp({ onToggle }: AgencySignUpProps) {
           <p className="font-semibold text-brand-charcoal text-[11px] uppercase tracking-widest mb-3">Next steps</p>
           <div className="flex gap-2"><CheckCircle2 size={14} className="text-brand-green mt-0.5 flex-shrink-0" /><span>Verify your email address</span></div>
           <div className="flex gap-2"><CheckCircle2 size={14} className="text-brand-green mt-0.5 flex-shrink-0" /><span>Upload your logo and set brand colours</span></div>
-          <div className="flex gap-2"><CheckCircle2 size={14} className="text-brand-green mt-0.5 flex-shrink-0" /><span>Share your invite code with your agents</span></div>
+          <div className="flex gap-2"><CheckCircle2 size={14} className="text-brand-green mt-0.5 flex-shrink-0" /><span>Invite your agents by email</span></div>
         </div>
         <button onClick={onToggle}
           className="w-full py-3 bg-brand-charcoal text-white rounded-xl font-bold text-sm hover:bg-black transition-all">
