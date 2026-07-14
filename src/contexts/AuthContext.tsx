@@ -227,9 +227,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       password: metadata.password || 'temporary-password',
       options: {
         data: signUpData,
-        // After clicking the verification link, redirect back to /login so
-        // the Login page's session-watcher can route them to the dashboard.
-        emailRedirectTo: `${window.location.origin}/login`,
+        // Keep a callback marker because Supabase can consume its hash before
+        // React mounts. The login page uses this to prevent auto-navigation.
+        emailRedirectTo: `${window.location.origin}/login?confirmed=signup`,
       }
     });
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -14,6 +14,11 @@ import { supabase } from '../lib/supabaseClient';
 
 export default function Login() {
   const location = useLocation();
+  const isSignupConfirmation = () => {
+    const queryParams = new URLSearchParams(window.location.search);
+    const hashParams = new URLSearchParams(window.location.hash.slice(1));
+    return queryParams.get('confirmed') === 'signup' || hashParams.get('type') === 'signup';
+  };
   const [isSignIn, setIsSignIn] = useState(() => {
     if (location.pathname === '/signup') return false;
     if (location.pathname === '/login') return true;
@@ -22,7 +27,9 @@ export default function Login() {
   const [activeRole, setActiveRole] = useState<'agent' | 'agency'>(() => {
     return (localStorage.getItem('proppost_auth_role') as 'agent' | 'agency') || 'agent';
   });
-  const { session, user } = useAuth();
+  const [isHandlingConfirmation, setIsHandlingConfirmation] = useState(isSignupConfirmation);
+  const confirmationHandledRef = useRef(false);
+  const { session, user, isLoading } = useAuth();
   const navigate = useNavigate();
 
   // When the link has ?invite=TOKEN, force the agent signup form regardless of
@@ -36,8 +43,6 @@ export default function Login() {
   }, [location.search]);
 
   useEffect(() => {
-    if (!session) return;
-
     // Never redirect away when an invite token is present — the invitee must
     // complete signup even if another user is already signed in on this device.
     const params = new URLSearchParams(location.search);
@@ -47,16 +52,41 @@ export default function Login() {
     // click the verification link. Sign them back out so they land on the
     // sign-in form instead of being silently pushed to the dashboard.
     const hashParams = new URLSearchParams(window.location.hash.slice(1));
-    if (hashParams.get('type') === 'signup') {
+    const isConfirmation = params.get('confirmed') === 'signup' || hashParams.get('type') === 'signup';
+    if (isConfirmation) {
+      setIsHandlingConfirmation(true);
+
+      if (!session) {
+        if (!isLoading) {
+          const timeout = window.setTimeout(() => {
+            window.history.replaceState(null, '', '/login');
+            setIsSignIn(true);
+            setIsHandlingConfirmation(false);
+          }, 1000);
+          return () => window.clearTimeout(timeout);
+        }
+        return;
+      }
+
+      if (confirmationHandledRef.current) return;
+      confirmationHandledRef.current = true;
       const role = (session.user?.user_metadata as Record<string, any> | undefined)?.role as 'agency' | 'agent' | undefined;
-      supabase.auth.signOut().then(() => {
-        window.history.replaceState(null, '', window.location.pathname);
+      void supabase.auth.signOut().then(({ error }) => {
+        if (error) throw error;
+        window.history.replaceState(null, '', '/login');
         setIsSignIn(true);
         if (role) setActiveRole(role);
+        setIsHandlingConfirmation(false);
         toast.success('Email confirmed! Sign in to access your account.');
+      }).catch((error) => {
+        confirmationHandledRef.current = false;
+        setIsHandlingConfirmation(false);
+        toast.error(error?.message || 'Email confirmed, but automatic sign-out failed. Please sign out before continuing.');
       });
       return;
     }
+
+    if (!session) return;
 
     if (user) {
       navigate(user.role === 'agency' ? '/agency-dashboard' : '/agent-dashboard');
@@ -73,7 +103,7 @@ export default function Login() {
       navigate('/agent-dashboard');
     }
     // Otherwise stay on /login; the console will show why fetchUserProfile failed.
-  }, [session, user, navigate, location.search]);
+  }, [session, user, isLoading, navigate, location.search]);
 
   useEffect(() => {
     localStorage.setItem('proppost_auth_role', activeRole);
@@ -82,6 +112,17 @@ export default function Login() {
   useEffect(() => {
     localStorage.setItem('proppost_auth_mode', isSignIn ? 'signin' : 'signup');
   }, [isSignIn]);
+
+  if (isHandlingConfirmation) {
+    return (
+      <div className="min-h-screen bg-brand-surface flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-4 border-brand-teal border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm font-bold text-brand-muted uppercase tracking-widest">Confirming your email...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-brand-surface">
