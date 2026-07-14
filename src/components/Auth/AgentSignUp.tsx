@@ -13,8 +13,8 @@ interface AgentSignUpProps {
   onToggle: () => void;
 }
 
-// Agents can join through an email invitation or create an independent account
-// and connect to an agency later.
+// Agents receive the same Agent workspace features whether they join through
+// an email invitation or create an independent account.
 // ──────────────────────────────────────────────────────────────────────────────
 
 type JoinMethod = 'email_invite' | 'independent';
@@ -316,7 +316,7 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
           <h3 className="text-xl font-display font-bold text-brand-charcoal">Welcome, {form.firstName}!</h3>
           <p className="text-brand-slate text-sm mt-2 leading-relaxed">
             {joinMethod === 'independent'
-              ? `Check ${form.email} to verify your account. You can connect to an agency anytime from your dashboard.`
+              ? `Check ${form.email} to verify your account and unlock your full agent dashboard.`
               : `Check ${form.email} to verify your account. Once confirmed, you can start publishing under ${confirmedAgency?.name}.`
             }
           </p>
@@ -347,7 +347,7 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
             <div>
               <h3 className="text-base font-display font-bold text-brand-charcoal">Join as an agent</h3>
               <p className="text-xs text-brand-muted mt-0.5">
-                How would you like to get started? You can connect to an agency now or later.
+                Choose how you'd like to create your agent account.
               </p>
             </div>
 
@@ -360,8 +360,8 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
               },
               {
                 id: 'independent' as JoinMethod,
-                title: "I don't have an agency yet",
-                desc: 'Sign up independently and connect to an agency from your dashboard later.',
+                title: 'Sign up as an independent agent',
+                desc: 'Create your account with full access to all agent features.',
               },
             ] as const).map(opt => (
               <button key={opt.id} type="button"
