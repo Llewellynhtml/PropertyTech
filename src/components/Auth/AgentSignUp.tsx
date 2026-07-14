@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Mail, Lock, User, Phone, Briefcase, Loader2, ArrowRight, ArrowLeft,
-  CheckCircle2, Eye, EyeOff, Search, MapPin, Instagram, X, AlertCircle, Clock
+  CheckCircle2, Eye, EyeOff, Instagram, AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -13,11 +13,11 @@ interface AgentSignUpProps {
   onToggle: () => void;
 }
 
-// Agents can join through an email invitation, request an agency connection,
-// or create an independent account and connect to an agency later.
+// Agents can join through an email invitation or create an independent account
+// and connect to an agency later.
 // ──────────────────────────────────────────────────────────────────────────────
 
-type JoinMethod = 'email_invite' | 'request' | 'independent';
+type JoinMethod = 'email_invite' | 'independent';
 
 const SPECIALISATIONS = [
   'Residential Sales', 'Rentals', 'Commercial',
@@ -131,9 +131,7 @@ function PasswordStrength({ password }: { password: string }) {
 }
 
 // ─── Agency confirmation badge (reused across join paths) ────────────────────
-function AgencyBadge({ name, city, method }: { name: string; city?: string; method: JoinMethod }) {
-  const methodLabel = method === 'email_invite' ? 'Joining via email invite'
-    : 'Request pending approval';
+function AgencyBadge({ name, city }: { name: string; city?: string }) {
   return (
     <div className="flex items-center gap-3 p-3 bg-brand-teal-light border border-brand-teal/30 rounded-xl">
       <div className="w-8 h-8 rounded-lg bg-brand-teal flex items-center justify-center flex-shrink-0">
@@ -142,7 +140,7 @@ function AgencyBadge({ name, city, method }: { name: string; city?: string; meth
       <div className="min-w-0">
         <p className="text-sm font-semibold text-brand-charcoal truncate">{name}</p>
         <p className="text-[11px] text-brand-teal-dark">
-          {city && `${city} · `}{methodLabel}
+          {city && `${city} · `}Joining via email invite
         </p>
       </div>
     </div>
@@ -153,7 +151,7 @@ function AgencyBadge({ name, city, method }: { name: string; city?: string; meth
 
 export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
   const [step, setStep]               = useState(0);
-  const [joinMethod, setJoinMethod]   = useState<JoinMethod>('request');
+  const [joinMethod, setJoinMethod]   = useState<JoinMethod>('independent');
   const [isLoading, setIsLoading]     = useState(false);
   const [isSuccess, setIsSuccess]     = useState(false);
 
@@ -161,8 +159,6 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
   const [confirmedAgency, setConfirmedAgency] = useState<{
     id: string; name: string; city?: string;
   } | null>(null);
-  const [agencySearch, setAgencySearch]   = useState('');
-  const [agencyResults, setAgencyResults] = useState<any[]>([]);
 
   // Email invite token (resolved from ?invite= URL param on mount)
   const [inviteToken, setInviteToken]           = useState<string | null>(null);
@@ -230,23 +226,6 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
   const set = (key: keyof typeof form, value: string | boolean) =>
     setForm(prev => ({ ...prev, [key]: value }));
 
-  // ── Agency search (for request path) ───────────────────────────────────────
-  useEffect(() => {
-    if (joinMethod !== 'request' || agencySearch.length < 2 || confirmedAgency) {
-      setAgencyResults([]);
-      return;
-    }
-    const t = setTimeout(async () => {
-      const { data } = await supabase
-        .from('agencies')
-        .select('id, agency_name, city, province')
-        .ilike('agency_name', `%${agencySearch}%`)
-        .limit(6);
-      setAgencyResults(data || []);
-    }, 400);
-    return () => clearTimeout(t);
-  }, [agencySearch, joinMethod, confirmedAgency]);
-
   const toggleArea = (area: string) =>
     setSelectedAreas(prev =>
       prev.includes(area) ? prev.filter(a => a !== area) : [...prev, area]
@@ -256,7 +235,6 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
   const canLeaveStep0 = (): boolean => {
     if (joinMethod === 'independent')  return true;
     if (joinMethod === 'email_invite') return !!inviteToken && !!confirmedAgency;
-    if (joinMethod === 'request')      return !!confirmedAgency;
     return false;
   };
 
@@ -267,7 +245,6 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
         return false;
       }
       if (!canLeaveStep0()) {
-        if (joinMethod === 'request') toast.error('Select an agency to join before continuing.');
         return false;
       }
     }
@@ -293,12 +270,6 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
 
     setIsLoading(true);
     try {
-      // Resolve the status explicitly per join method so the trigger and the
-      // client-side fallback agree. Independent = active immediately; request
-      // = pending until admin approval; email invitations are active.
-      const resolvedStatus =
-        joinMethod === 'request' ? 'pending' : 'active';
-
       await signUp(form.email, 'agent', {
         password: form.password,
         name: `${form.firstName} ${form.lastName}`,
@@ -312,7 +283,7 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
         specialisation: form.specialisation,
         areas: selectedAreas,
         instagram_url: form.instagramUrl,
-        status: resolvedStatus,
+        status: 'active',
       });
 
       if (inviteToken) {
@@ -323,11 +294,7 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
       }
 
       setIsSuccess(true);
-      toast.success(
-        joinMethod === 'request'
-          ? 'Request sent! Your agency admin will review and approve you.'
-          : `Account created! Check ${form.email} to verify your account.`
-      );
+      toast.success(`Account created! Check ${form.email} to verify your account.`);
     } catch (err: any) {
       console.error('Agent signup error:', err);
       const msg = err?.message || err?.error_description || err?.error || JSON.stringify(err);
@@ -342,33 +309,18 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
     return (
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
         className="text-center py-8 space-y-5">
-        <div className={cn(
-          'w-16 h-16 rounded-full flex items-center justify-center mx-auto',
-          joinMethod === 'request' ? 'bg-amber-50' : 'bg-brand-green-light',
-        )}>
-          {joinMethod === 'request'
-            ? <Clock className="w-8 h-8 text-amber-500" />
-            : <CheckCircle2 className="w-8 h-8 text-brand-green" />
-          }
+        <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto bg-brand-green-light">
+          <CheckCircle2 className="w-8 h-8 text-brand-green" />
         </div>
         <div>
-          <h3 className="text-xl font-display font-bold text-brand-charcoal">
-            {joinMethod === 'request' ? 'Request sent!' : `Welcome, ${form.firstName}!`}
-          </h3>
+          <h3 className="text-xl font-display font-bold text-brand-charcoal">Welcome, {form.firstName}!</h3>
           <p className="text-brand-slate text-sm mt-2 leading-relaxed">
-            {joinMethod === 'request'
-              ? `Your request to join ${confirmedAgency?.name} is pending approval. You'll receive an email at ${form.email} once your admin approves you.`
-              : joinMethod === 'independent'
+            {joinMethod === 'independent'
               ? `Check ${form.email} to verify your account. You can connect to an agency anytime from your dashboard.`
               : `Check ${form.email} to verify your account. Once confirmed, you can start publishing under ${confirmedAgency?.name}.`
             }
           </p>
         </div>
-        {joinMethod === 'request' && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[11px] text-amber-700 leading-relaxed text-left">
-            <strong>What happens next:</strong> Your agency admin will receive a notification and can approve or reject your request from their dashboard. You can sign in once approved.
-          </div>
-        )}
         <button onClick={onToggle}
           className="w-full py-3 bg-brand-charcoal text-white rounded-xl font-bold text-sm hover:bg-black transition-all">
           Back to Sign In
@@ -407,18 +359,13 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
                 desc: 'Use the link in your invitation email — it pre-fills everything.',
               },
               {
-                id: 'request' as JoinMethod,
-                title: 'Search for my agency',
-                desc: 'Find your agency and send a join request for admin approval.',
-              },
-              {
                 id: 'independent' as JoinMethod,
                 title: "I don't have an agency yet",
                 desc: 'Sign up independently and connect to an agency from your dashboard later.',
               },
             ] as const).map(opt => (
               <button key={opt.id} type="button"
-                onClick={() => { setJoinMethod(opt.id); setConfirmedAgency(null); setAgencySearch(''); }}
+                onClick={() => { setJoinMethod(opt.id); setConfirmedAgency(null); }}
                 className={cn(
                   'w-full text-left p-4 rounded-xl border flex gap-3 items-start transition-all',
                   joinMethod === opt.id
@@ -461,7 +408,7 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
                 )}
 
                 {!inviteValidating && !inviteError && inviteToken && confirmedAgency && (
-                  <AgencyBadge name={confirmedAgency.name} city={confirmedAgency.city} method="email_invite" />
+                  <AgencyBadge name={confirmedAgency.name} city={confirmedAgency.city} />
                 )}
 
                 {!inviteValidating && !inviteToken && !inviteError && (
@@ -478,61 +425,6 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
                     <p className="text-[11px] text-brand-muted text-center">
                       Can't find the email? Ask your agency admin to resend the invitation.
                     </p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ── Agency search (request path) ── */}
-            {joinMethod === 'request' && (
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-brand-muted uppercase tracking-[0.15em]">
-                  Find your agency <span className="text-red-400">*</span>
-                </label>
-                {!confirmedAgency ? (
-                  <>
-                    <div className="relative">
-                      <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-muted" />
-                      <input
-                        value={agencySearch}
-                        onChange={e => setAgencySearch(e.target.value)}
-                        placeholder="Search by agency name…"
-                        className="w-full py-3 pl-10 pr-4 bg-brand-surface border border-brand-border rounded-xl text-sm text-brand-charcoal focus:ring-2 focus:ring-brand-teal/20 focus:border-brand-teal outline-none"
-                      />
-                    </div>
-                    {agencyResults.length > 0 && (
-                      <div className="border border-brand-border rounded-xl overflow-hidden divide-y divide-brand-border">
-                        {agencyResults.map(a => (
-                          <button key={a.id} type="button"
-                            onClick={() => { setConfirmedAgency({ id: a.id, name: a.agency_name, city: a.city }); setAgencyResults([]); }}
-                            className="w-full text-left px-4 py-3 text-sm hover:bg-brand-surface transition-colors flex items-center justify-between">
-                            <span className="font-medium text-brand-charcoal">{a.agency_name}</span>
-                            {a.city && (
-                              <span className="text-[11px] text-brand-muted flex items-center gap-1">
-                                <MapPin size={10} />{a.city}{a.province ? `, ${a.province}` : ''}
-                              </span>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {agencySearch.length >= 2 && agencyResults.length === 0 && (
-                      <p className="text-[11px] text-brand-muted text-center py-1">
-                        No agencies found for "{agencySearch}" — try a shorter name.
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <div className="space-y-2">
-                    <AgencyBadge name={confirmedAgency.name} city={confirmedAgency.city} method="request" />
-                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-700 leading-relaxed">
-                      Your account will be created as <strong>pending</strong>. You can only log in once your agency admin approves your request.
-                    </div>
-                    <button type="button"
-                      onClick={() => { setConfirmedAgency(null); setAgencySearch(''); }}
-                      className="text-[11px] text-brand-muted hover:text-red-500 transition-colors flex items-center gap-1">
-                      <X size={11} /> Choose a different agency
-                    </button>
                   </div>
                 )}
               </div>
@@ -563,8 +455,6 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
                 ? <><Loader2 size={16} className="animate-spin" /> Validating invite…</>
                 : joinMethod === 'email_invite' && !inviteToken
                   ? 'Use the link in your email'
-                : joinMethod === 'request' && !confirmedAgency
-                  ? 'Select an agency to continue'
                   : <><span>Continue</span><ArrowRight size={16} className="group-hover:translate-x-0.5 transition-transform" /></>
               }
             </button>
@@ -591,7 +481,7 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
 
             {/* Persistent agency badge */}
             {confirmedAgency && joinMethod !== 'independent' && (
-              <AgencyBadge name={confirmedAgency.name} city={confirmedAgency.city} method={joinMethod} />
+              <AgencyBadge name={confirmedAgency.name} city={confirmedAgency.city} />
             )}
 
             <div className="grid grid-cols-2 gap-3">
@@ -734,7 +624,7 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
 
             {/* Final agency reminder before submit */}
             {confirmedAgency && joinMethod !== 'independent' && (
-              <AgencyBadge name={confirmedAgency.name} city={confirmedAgency.city} method={joinMethod} />
+              <AgencyBadge name={confirmedAgency.name} city={confirmedAgency.city} />
             )}
 
             <Field label="Password" required hint="Min. 8 chars · 1 uppercase · 1 number · 1 special character">
@@ -785,7 +675,7 @@ export default function AgentSignUp({ onToggle }: AgentSignUpProps) {
                 className="flex-1 py-3 bg-brand-teal text-white rounded-xl font-bold text-sm hover:bg-brand-teal-deep transition-all flex items-center justify-center gap-2 disabled:opacity-60">
                 {isLoading
                   ? <Loader2 size={16} className="animate-spin" />
-                  : <>{joinMethod === 'request' ? 'Send join request' : 'Create my account'} <CheckCircle2 size={16} /></>
+                  : <>Create my account <CheckCircle2 size={16} /></>
                 }
               </button>
             </div>
