@@ -227,9 +227,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       password: metadata.password || 'temporary-password',
       options: {
         data: signUpData,
-        // Keep a callback marker because Supabase can consume its hash before
-        // React mounts. The login page uses this to prevent auto-navigation.
-        emailRedirectTo: `${window.location.origin}/login?confirmed=signup`,
+        // Use a dedicated callback route that clears Supabase's temporary
+        // confirmation session before the user can enter a dashboard.
+        emailRedirectTo: `${window.location.origin}/auth/confirmed`,
       }
     });
 
@@ -324,7 +324,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const resendVerification = async (email: string) => {
-    return supabase.auth.resend({ email, type: 'signup' });
+    return supabase.auth.resend({
+      email,
+      type: 'signup',
+      options: { emailRedirectTo: `${window.location.origin}/auth/confirmed` },
+    });
   };
 
   return (
